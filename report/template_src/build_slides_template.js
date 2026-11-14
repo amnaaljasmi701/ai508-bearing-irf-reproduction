@@ -109,17 +109,17 @@ function callout(s, big, label, x, y, color) {
 
 // 5 ---------------------------------------------------------------- setup
 {
-  const s = base("Experimental setup: paper vs reproduction", "Emphasise the structural difference: cores of one laptop replace worker nodes. List the assumptions you had to make.");
+  const s = base("Experimental setup: paper vs reproduction", "Emphasise the structural difference: cores of one machine replace worker nodes. List the assumptions you had to make.");
   table(s, [
     ["", "Original study", "This reproduction"],
-    ["Hardware", "1 master + 4 workers (i7-9700K, 32 GB)", "1 laptop, {{ENV_CORES}} logical cores, {{ENV_RAM}} GB (WSL2)"],
-    ["Software", "CentOS 8.1, Hadoop 3.2, Spark 3.0, Python 3.7", "WSL2 Ubuntu, Spark {{ENV_SPARK}}, Python {{ENV_PY}}"],
-    ["Storage", "HDFS", "Parquet on NVMe SSD"],
+    ["Hardware", "1 master + 4 workers (i7-9700K, 32 GB)", "1 GitHub Actions runner, {{ENV_CORES}} vCPUs, {{ENV_RAM}} GB"],
+    ["Software", "CentOS 8.1, Hadoop 3.2, Spark 3.0, Python 3.7", "Ubuntu, Spark {{ENV_SPARK}} (local mode), Python {{ENV_PY}}"],
+    ["Storage", "HDFS", "Parquet on local SSD"],
     ["Data", "5.6 / 11.2 / 20.4 GB", "{{RAW_GB}} GB (Dataset 1) + 1.4 / 2.8 GB subsets"],
-    ["Parallelism", "1–4 worker nodes", "1, 2, 4, 8 executor cores (local[c])"],
+    ["Parallelism", "1–4 worker nodes", "1, 2, 3, 4 executor cores (local[c])"],
     ["Unspecified → assumed", "–", "window 2,048; db4 level 3; depth 10; mean-accuracy filter; threshold {{IRF_THRESHOLD}}"],
   ], { x: 0.5, y: 1.35, w: 12.3, colW: [2.3, 4.5, 5.5], fontSize: 14, rowH: 0.62 });
-  s.addText("Experiments: E1 accuracy (20/100/200 trees)  •  E2 scalability (1–8 cores)  •  E3 data size (1.4–5.6 GB)", {
+  s.addText("Experiments: E1 accuracy (20/100/200 trees)  •  E2 scalability (1–4 cores)  •  E3 data size (1.4–5.6 GB)", {
     x: 0.5, y: 6.2, w: 12.3, h: 0.5, fontFace: F, fontSize: 15, bold: true, color: NAVY, margin: 0 });
 }
 
@@ -159,8 +159,8 @@ function callout(s, big, label, x, y, color) {
     ["Cores", "Train IRF (s)", "Reduction", "Speed-up"],
     ["1", "{{E2_IRF_TRAIN_1}}", "{{E2_RED_1}}%", "{{E2_SPEEDUP_1}}"],
     ["2", "{{E2_IRF_TRAIN_2}}", "{{E2_RED_2}}%", "{{E2_SPEEDUP_2}}"],
+    ["3", "{{E2_IRF_TRAIN_3}}", "{{E2_RED_3}}%", "{{E2_SPEEDUP_3}}"],
     ["4", "{{E2_IRF_TRAIN_4}}", "{{E2_RED_4}}%", "{{E2_SPEEDUP_4}}"],
-    ["8", "{{E2_IRF_TRAIN_8}}", "{{E2_RED_8}}%", "{{E2_SPEEDUP_8}}"],
   ], { x: 8.3, y: 1.4, w: 4.6, colW: [0.9, 1.3, 1.2, 1.2], fontSize: 13, rowH: 0.48 });
   bullets(s, [
     "Paper: −51.5 / −66.1 / −73.3% with 2 / 3 / 4 nodes",
@@ -210,11 +210,11 @@ function callout(s, big, label, x, y, color) {
     "Challenges",
     "- No published code: IRF rebuilt from prose and equations",
     "- No Python access to MLlib tree internals: solved with the Parquet node table + verification",
-    "- 16 GB laptop: WSL2 memory limit, binary window storage, Arrow batches",
+    "- Limited RAM/disk of one runner: binary window storage, Arrow batches",
     "- Similarity matrix cost: vectorised NumPy, one Spark task per row",
     "Limitations",
     "- Only Dataset 1 (5.6 GB); no real multi-node cluster",
-    "- {{NSEEDS}} seed(s) per setting; laptop timings depend on power mode and load",
+    "- {{NSEEDS}} seed(s) per setting; cloud timings depend on background load",
     "- Same random split as the paper, so the leakage concern applies to our numbers too",
   ]);
 }

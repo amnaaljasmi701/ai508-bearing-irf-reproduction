@@ -9,7 +9,7 @@ on:
       mode:
         description: "smoke = tiny test, full = 5.6 GB experiments"
         type: choice
-        options: [smoke, full]
+        options: [smoke, full, extra]
         default: smoke
   push:
     branches: [main]
@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.m.outputs.mode }}
+      exps: ${{ steps.m.outputs.exps }}
     steps:
       - id: m
         env:
@@ -36,8 +37,9 @@ jobs:
         run: |
           MODE=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then MODE="${{ inputs.mode }}"; fi
-          case "$MSG" in *"[run full]"*) MODE=full;; *"[run smoke]"*) MODE=smoke;; esac
+          case "$MSG" in *"[run full]"*) MODE=full;; *"[run smoke]"*) MODE=smoke;; *"[run extra]"*) MODE=extra;; esac
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          if [ "$MODE" = "extra" ]; then echo 'exps=["e1b"]' >> "$GITHUB_OUTPUT"; else echo 'exps=["e1","e2","e3","e1b"]' >> "$GITHUB_OUTPUT"; fi
           echo "mode=$MODE"
 
   data:
@@ -53,7 +55,7 @@ jobs:
         with: { distribution: temurin, java-version: "17" }
       - name: Select configuration
         run: |
-          if [ "${{ needs.mode.outputs.mode }}" = "full" ]; then
+          if [ "${{ needs.mode.outputs.mode }}" != "smoke" ]; then
             echo "IRF_CONFIG=config.yaml" >> $GITHUB_ENV; echo "SUFFIX=" >> $GITHUB_ENV
           else
             echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV
@@ -87,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        exp: [e1, e2, e3]
+        exp: ${{ fromJSON(needs.mode.outputs.exps) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -96,7 +98,7 @@ jobs:
         with: { distribution: temurin, java-version: "17" }
       - name: Select configuration
         run: |
-          if [ "${{ needs.mode.outputs.mode }}" = "full" ]; then
+          if [ "${{ needs.mode.outputs.mode }}" != "smoke" ]; then
             echo "IRF_CONFIG=config.yaml" >> $GITHUB_ENV; echo "SUFFIX=" >> $GITHUB_ENV
           else
             echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV
@@ -110,6 +112,7 @@ jobs:
             e1) python scripts/04_run_e1_accuracy.py --fresh ;;
             e2) python scripts/05_run_e2_scalability.py --fresh ;;
             e3) python scripts/06_run_e3_datasize.py --fresh ;;
+            e1b) python scripts/04b_run_e1b_blocked_split.py --fresh ;;
           esac
       - uses: actions/upload-artifact@v4
         if: always()
@@ -128,7 +131,7 @@ jobs:
         with: { python-version: "3.11", cache: pip }
       - name: Select configuration
         run: |
-          if [ "${{ needs.mode.outputs.mode }}" = "full" ]; then
+          if [ "${{ needs.mode.outputs.mode }}" != "smoke" ]; then
             echo "IRF_CONFIG=config.yaml" >> $GITHUB_ENV; echo "SUFFIX=" >> $GITHUB_ENV
           else
             echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV

@@ -119,7 +119,7 @@ c.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 300 },
 // ---------------- abstract
 c.push(H1("Abstract"));
 c.push(P(
-  "Wan et al. (2021) proposed an improved random forest (IRF) for rolling-bearing fault diagnosis that removes low-accuracy trees and trees that vote redundantly, and parallelised the whole method on Apache Spark. On a five-node cluster they reported 97.22% accuracy with 200 trees against 96.51% for the standard Spark random forest, training-time reductions of up to 73.26% with four worker nodes, and a much shorter diagnosis time. This report reproduces three parts of that study on a single laptop. The Case Western Reserve University (CWRU) vibration signals were enlarged by overlapping sampling to a {{RAW_GB}} GB dataset of {{N_WINDOWS}} windows, wavelet-packet features were extracted with Spark, and the IRF steps (tree filtering, path extraction, tree-similarity matrix and tree selection) were re-implemented in PySpark because the original code is not published. With 200 trees our Spark-IRFA reached {{E1_IRF_200_ACC}}% test accuracy, {{E1_VERDICT_200}} Spark-RFA ({{E1_RF_200_ACC}}%), while keeping {{E1_IRF_200_NTREES}} of the 200 trees. Increasing Spark executor cores from 1 to {{E2_MAXC}}, used as a proxy for worker nodes, reduced Spark-IRFA training time by {{E2_RED_MAX}}%, and the smaller forest cut diagnosis time by {{E1_DIAGRED_100}}% at 100 trees. Exact values differ from the paper because the paper leaves the wavelet settings, tree depth and similarity threshold unspecified, and because one machine is not a cluster. The study is therefore only partially reproducible from its text alone."));
+  "Wan et al. (2021) proposed an improved random forest (IRF) for rolling-bearing fault diagnosis that removes low-accuracy trees and trees that vote redundantly, and parallelised the whole method on Apache Spark. On a five-node cluster they reported 97.22% accuracy with 200 trees against 96.51% for the standard Spark random forest, training-time reductions of up to 73.26% with four worker nodes, and a much shorter diagnosis time. This report reproduces three parts of that study on a single machine, a four-core GitHub Actions runner. The Case Western Reserve University (CWRU) vibration signals were enlarged by overlapping sampling to a {{RAW_GB}} GB dataset of {{N_WINDOWS}} windows, wavelet-packet features were extracted with Spark, and the IRF steps (tree filtering, path extraction, tree-similarity matrix and tree selection) were re-implemented in PySpark because the original code is not published. With 200 trees our Spark-IRFA reached {{E1_IRF_200_ACC}}% test accuracy, {{E1_VERDICT_200}} Spark-RFA ({{E1_RF_200_ACC}}%), while keeping {{E1_IRF_200_NTREES}} of the 200 trees. Increasing Spark executor cores from 1 to {{E2_MAXC}}, used as a proxy for worker nodes, reduced Spark-IRFA training time by {{E2_RED_MAX}}%, and the smaller forest cut diagnosis time by {{E1_DIAGRED_100}}% at 100 trees. Exact values differ from the paper because the paper leaves the wavelet settings, tree depth and similarity threshold unspecified, and because one machine is not a cluster. The study is therefore only partially reproducible from its text alone."));
 
 // ---------------- 1 introduction
 c.push(H1("1. Introduction"));
@@ -129,7 +129,7 @@ c.push(P(
   "The selected paper is Wan et al., “An Efficient Rolling Bearing Fault Diagnosis Method Based on Spark and Improved Random Forest Algorithm”, published in ", "*IEEE Access*", " (Q2) in 2021", fnWanFull(37866), ". It addresses two weaknesses of the classic random forest (RF) of Breiman", fn(['Breiman, Leo, "Random Forests", ', { t: "Machine Learning", i: true }, " vol. 45, no. 1 (2001), p. 5. Available at: ", { link: "https://doi.org/10.1023/A:1010933404324" }, "."]),
   " when it is used on large vibration datasets: training and diagnosis are slow, and many trees are weak or cast near-identical votes. The authors propose an improved random forest that keeps only accurate and mutually dissimilar trees, and they distribute every stage of the method on Apache Spark."));
 c.push(P(
-  "The objective of this assignment is to reproduce the methodology and selected experiments of the paper, compare the results with the original ones, and explain the differences. Because I worked alone, the scope agreed in the proposal is reduced to three experiments on the smallest of the paper's three datasets: E1 compares the accuracy of a serial scikit-learn RF, Spark MLlib RF and the Spark IRF with 20, 100 and 200 trees; E2 measures training and diagnosis time as the number of Spark executor cores grows from 1 to 8, as a single-machine stand-in for the paper's one to four worker nodes; and E3 measures accuracy and training time on 1.4, 2.8 and 5.6 GB subsets. All numbers in Sections 4 and 5 were produced by the scripts in the project repository on my own machine; the values attributed to the paper are labelled as such."));
+  "The objective of this assignment is to reproduce the methodology and selected experiments of the paper, compare the results with the original ones, and explain the differences. Because I worked alone, the scope agreed in the proposal is reduced to three experiments on the smallest of the paper's three datasets: E1 compares the accuracy of a serial scikit-learn RF, Spark MLlib RF and the Spark IRF with 20, 100 and 200 trees; E2 measures training and diagnosis time as the number of Spark executor cores grows from 1 to 4, as a single-machine stand-in for the paper's one to four worker nodes; and E3 measures accuracy and training time on 1.4, 2.8 and 5.6 GB subsets. All numbers in Sections 4 and 5 were produced by the scripts in the project repository, executed by the repository's GitHub Actions workflow; the values attributed to the paper are labelled as such."));
 
 // ---------------- 2 original study
 c.push(H1("2. The Original Study"));
@@ -182,8 +182,8 @@ c.push(P(
 c.push(H2("3.3 Computing environment"));
 c.push(TCAP("Table 2. Computing environment of the original study and of this reproduction."));
 c.push(T(["Item", "Original study", "This reproduction"], [
-  ["Hardware", "1 master (Xeon E3-1225 v5, 32 GB) + 4 workers (i7-9700K, 8 cores, 32 GB)", "1 laptop: {{ENV_CPU}}, {{ENV_CORES}} logical cores, {{ENV_RAM}} GB visible to WSL2, NVMe SSD"],
-  ["Operating system", "CentOS 8.1", "Windows 11 + WSL2 ({{ENV_OS}})"],
+  ["Hardware", "1 master (Xeon E3-1225 v5, 32 GB) + 4 workers (i7-9700K, 8 cores, 32 GB)", "1 GitHub-hosted runner (virtual machine): {{ENV_CPU}}, {{ENV_CORES}} vCPUs, {{ENV_RAM}} GB RAM, SSD"],
+  ["Operating system", "CentOS 8.1", "Ubuntu Linux ({{ENV_OS}})"],
   ["Big Data framework", "Hadoop 3.2 (HDFS), Spark 3.0 standalone cluster", "Spark {{ENV_SPARK}} local mode, Parquet on local disk, driver memory {{ENV_DRIVER_MEM}}"],
   ["Language and libraries", "Python 3.7", "Python {{ENV_PY}}, {{ENV_JAVA}}, NumPy {{ENV_NUMPY}}, pandas {{ENV_PANDAS}}, PyArrow {{ENV_PYARROW}}, PyWavelets {{ENV_PYWT}}, scikit-learn {{ENV_SKLEARN}}"],
 ], [1.6, 2.6, 3.4]));
@@ -215,14 +215,31 @@ c.push(T(["Parameter", "Value used", "Source"], [
 ], [2.3, 2.6, 2.7]));
 c.push(H2("3.6 Experiments and evaluation measures"));
 c.push(BUL("**E1 – accuracy.** Python-RFA, Spark-RFA and Spark-IRFA with 20, 100 and 200 trees on the full dataset, using all cores. Measures: test accuracy, weighted F1, training and diagnosis time, and the number of trees kept by the IRF. A sweep of similarityFilter from 0.3 to 0.9 reuses the similarity matrix of each run."));
-c.push(BUL("**E2 – scalability.** Spark-RFA and Spark-IRFA with 100 trees and 1, 2, 4 and 8 executor cores. Measures: training time, its reduction relative to one core, speed-up and diagnosis time."));
+c.push(BUL("**E2 – scalability.** Spark-RFA and Spark-IRFA with 100 trees and 1, 2, 3 and 4 executor cores, matching the paper's 1–4 worker nodes. Measures: training time, its reduction relative to one core, speed-up and diagnosis time."));
 c.push(BUL("**E3 – data size.** Spark-RFA and Spark-IRFA with 100 trees on nested random subsets of 25%, 50% and 100% of the windows (about 1.4, 2.8 and 5.6 GB). Measures: accuracy and training time."));
+
+c.push(H2("3.7 Discrepancies between the original and the reproduced setup"));
+c.push(P("Table 4 lists every known difference between the experimental setup of the paper and ours, why it exists, and its expected effect on the comparison."));
+c.push(TCAP("Table 4. Discrepancies between the original study and this reproduction."));
+c.push(T(["Aspect", "Original study", "This reproduction", "Reason", "Expected effect"], [
+  ["Compute platform", "5-node cluster (1 master, 4 workers)", "1 machine, Spark local mode", "no cluster available", "absolute times not comparable; only trends"],
+  ["Parallel units in E2", "1–4 worker nodes (8 cores each)", "1–4 executor cores (vCPUs)", "single machine", "earlier flattening of speed-up; no network cost"],
+  ["Storage", "HDFS", "Parquet on local disk", "no cluster", "no replication or network I/O"],
+  ["Software versions", "Spark 3.0, Hadoop 3.2, Python 3.7", "Spark {{ENV_SPARK}}, Python {{ENV_PY}}, no Hadoop", "current stable versions", "minor; same MLlib algorithm"],
+  ["Datasets", "5.6, 11.2, 20.4 GB", "5.6 GB and nested 1.4 / 2.8 GB subsets", "single-student scope, memory", "E3 covers a smaller size range"],
+  ["Working conditions", "Table 1 of the paper", "10 classes × 4 loads, 12 kHz drive end", "class list not reproducible from text", "different difficulty of the task"],
+  ["Window, overlap, wavelet", "not specified", "2,048 samples; even spacing; db4, 3 levels", "not specified", "different features and accuracy"],
+  ["Tree depth, filter rule, threshold", "described qualitatively", "depth 10; mean-accuracy filter; 0.5", "not specified", "different IRF size"],
+  ["IRF voting", "majority voting", "MLlib probability averaging (sub-model)", "same engine for fair timing", "small accuracy differences"],
+  ["Similarity computation", "Method D, one job per row", "all rows in one Spark job", "less scheduling overhead", "same matrix, lower overhead"],
+  ["Repetitions", "single runs", "{{NSEEDS}} seed(s) per setting", "time limits", "random variation not quantified"],
+], [1.4, 1.5, 1.6, 1.4, 1.7]));
 
 // ---------------- 4 results
 c.push(H1("4. Results and Comparison"));
 c.push(P("All values below come from the files in the results folder of the repository; times are in seconds and are means over {{NSEEDS}} seed(s)."));
 c.push(H2("4.1 E1 – Accuracy against the number of trees"));
-c.push(TCAP("Table 4. Test accuracy (%) of the three methods; paper values in the last column."));
+c.push(TCAP("Table 5. Test accuracy (%) of the three methods; paper values in the last column."));
 c.push(T(["Trees", "Python-RFA (ours)", "Spark-RFA (ours)", "Spark-IRFA (ours)", "IRF trees kept", "Paper (Py / Spark / IRF)"], [
   ["20", "{{E1_PY_20_ACC}}", "{{E1_RF_20_ACC}}", "{{E1_IRF_20_ACC}}", "{{E1_IRF_20_NTREES}} of 20", "95.85 / 95.69 / 95.66"],
   ["100", "{{E1_PY_100_ACC}}", "{{E1_RF_100_ACC}}", "{{E1_IRF_100_ACC}}", "{{E1_IRF_100_NTREES}} of 100", "not reported"],
@@ -232,7 +249,7 @@ c.push(FIG("e1_accuracy.png", 4.9));
 c.push(CAP("Figure 1. E1 accuracy of our three implementations (solid) and the values reported by the paper (dashed; the paper gives exact values only for 20 and 200 trees)."));
 c.push(P(
   "With 200 trees, Spark-IRFA reached {{E1_IRF_200_ACC}}%, which is {{E1_VERDICT_200}} Spark-RFA ({{E1_D_IRF_RF_200}} percentage points); at 100 and 20 trees it was {{E1_VERDICT_100}} and {{E1_VERDICT_20}} Spark-RFA respectively ({{E1_D_IRF_RF_100}} and {{E1_D_IRF_RF_20}} pp). Spark-IRFA was more accurate than Spark-RFA in {{E1_IRF_WINS}} of the three forest sizes. Spark-RFA was {{E1_VERDICT_PY_200}} the serial scikit-learn forest at 200 trees ({{E1_D_RF_PY_200}} pp). Small differences between the two are expected, because both implement the same algorithm but with different random streams and a different split search (MLlib bins every continuous feature into 32 candidate thresholds, scikit-learn tests every value). Compared with the paper, our accuracies at 200 trees differ by {{E1_GAP_PY_200}}, {{E1_GAP_RF_200}} and {{E1_GAP_IRF_200}} pp for Python-RFA, Spark-RFA and Spark-IRFA. Growing the forest from 20 to 200 trees changed Spark-RFA accuracy by {{E1_RF_GAIN_TREES}} pp and Spark-IRFA accuracy by {{E1_IRF_GAIN_TREES}} pp."));
-c.push(TCAP("Table 5. E1 training and diagnosis times (s)."));
+c.push(TCAP("Table 6. E1 training and diagnosis times (s)."));
 c.push(T(["Trees", "Train Py", "Train Spark-RF", "Train Spark-IRF (of which optimisation)", "Diagnose Py", "Diagnose Spark-RF", "Diagnose Spark-IRF"], [
   ["20", "{{E1_PY_20_TRAIN}}", "{{E1_RF_20_TRAIN}}", "{{E1_IRF_20_TRAIN}} ({{E1_IRF_20_OPT}})", "{{E1_PY_20_DIAG}}", "{{E1_RF_20_DIAG}}", "{{E1_IRF_20_DIAG}}"],
   ["100", "{{E1_PY_100_TRAIN}}", "{{E1_RF_100_TRAIN}}", "{{E1_IRF_100_TRAIN}} ({{E1_IRF_100_OPT}})", "{{E1_PY_100_DIAG}}", "{{E1_RF_100_DIAG}}", "{{E1_IRF_100_DIAG}}"],
@@ -242,8 +259,8 @@ c.push(P(
   "Because the IRF keeps fewer trees, its diagnosis time was {{E1_DIAGRED_20}}%, {{E1_DIAGRED_100}}% and {{E1_DIAGRED_200}}% lower than that of Spark-RFA for 20, 100 and 200 trees, against 74.29% reported by the paper for Dataset 1 with 100 trees. Relative to the serial Python-RFA, Spark-IRFA diagnosed {{E1_SPEEDUP_PY_200}} times faster with 200 trees. The price is a longer training phase: the sub-forest optimisation added {{E1_IRF_100_OPT}} s at 100 trees, of which {{E1_IRF_100_SIM}} s were spent on the similarity matrix, whose trees had on average {{E1_IRF_100_PATHS}} root-to-leaf paths."));
 c.push(H2("4.2 Sensitivity to the similarity threshold"));
 c.push(P(
-  "With 100 trees the low-accuracy filter kept {{SW_SUB}} trees. Of the off-diagonal entries of the similarity matrix, {{E1_SIM_ZERO_FRAC_100}}% were zero because the two roots used different features or distant thresholds; the non-zero entries had a median of {{E1_SIM_NZ_MEDIAN_100}} and a 90th percentile of {{E1_SIM_NZ_P90_100}}. Table 6 shows how many trees the IRF keeps for each value of similarityFilter, and the hard-vote accuracy of the resulting forest."));
-c.push(TCAP("Table 6. Effect of similarityFilter (100 trees; accuracy by majority vote of the kept trees)."));
+  "With 100 trees the low-accuracy filter kept {{SW_SUB}} trees. Of the off-diagonal entries of the similarity matrix, {{E1_SIM_ZERO_FRAC_100}}% were zero because the two roots used different features or distant thresholds; the non-zero entries had a median of {{E1_SIM_NZ_MEDIAN_100}} and a 90th percentile of {{E1_SIM_NZ_P90_100}}. Table 7 shows how many trees the IRF keeps for each value of similarityFilter, and the hard-vote accuracy of the resulting forest."));
+c.push(TCAP("Table 7. Effect of similarityFilter (100 trees; accuracy by majority vote of the kept trees)."));
 c.push(T(["Threshold", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9"], [
   ["Groups", "{{SW_G_3}}", "{{SW_G_4}}", "{{SW_G_5}}", "{{SW_G_6}}", "{{SW_G_7}}", "{{SW_G_8}}", "{{SW_G_9}}"],
   ["Trees kept", "{{SW_N_3}}", "{{SW_N_4}}", "{{SW_N_5}}", "{{SW_N_6}}", "{{SW_N_7}}", "{{SW_N_8}}", "{{SW_N_9}}"],
@@ -252,21 +269,21 @@ c.push(T(["Threshold", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9"], [
 c.push(FIG("e1_threshold_sweep.png", 4.2));
 c.push(CAP("Figure 2. Number of trees kept by the IRF as a function of similarityFilter."));
 c.push(H2("4.3 E2 – Scalability with executor cores"));
-c.push(TCAP("Table 7. E2 times (s) with 100 trees; reduction and speed-up of Spark-IRFA relative to one core."));
+c.push(TCAP("Table 8. E2 times (s) with 100 trees; reduction and speed-up of Spark-IRFA relative to one core."));
 c.push(T(["Cores", "Train Spark-RF", "Train Spark-IRF", "IRF optimisation", "Reduction IRF (%)", "Speed-up IRF", "Diagnose Spark-RF", "Diagnose Spark-IRF"], [
   ["1", "{{E2_RF_TRAIN_1}}", "{{E2_IRF_TRAIN_1}}", "{{E2_IRF_OPT_1}}", "{{E2_RED_1}}", "{{E2_SPEEDUP_1}}", "{{E2_RF_DIAG_1}}", "{{E2_IRF_DIAG_1}}"],
   ["2", "{{E2_RF_TRAIN_2}}", "{{E2_IRF_TRAIN_2}}", "{{E2_IRF_OPT_2}}", "{{E2_RED_2}}", "{{E2_SPEEDUP_2}}", "{{E2_RF_DIAG_2}}", "{{E2_IRF_DIAG_2}}"],
+  ["3", "{{E2_RF_TRAIN_3}}", "{{E2_IRF_TRAIN_3}}", "{{E2_IRF_OPT_3}}", "{{E2_RED_3}}", "{{E2_SPEEDUP_3}}", "{{E2_RF_DIAG_3}}", "{{E2_IRF_DIAG_3}}"],
   ["4", "{{E2_RF_TRAIN_4}}", "{{E2_IRF_TRAIN_4}}", "{{E2_IRF_OPT_4}}", "{{E2_RED_4}}", "{{E2_SPEEDUP_4}}", "{{E2_RF_DIAG_4}}", "{{E2_IRF_DIAG_4}}"],
-  ["8", "{{E2_RF_TRAIN_8}}", "{{E2_IRF_TRAIN_8}}", "{{E2_IRF_OPT_8}}", "{{E2_RED_8}}", "{{E2_SPEEDUP_8}}", "{{E2_RF_DIAG_8}}", "{{E2_IRF_DIAG_8}}"],
 ], [0.7, 1.0, 1.0, 1.0, 1.0, 0.9, 1.0, 1.0]));
 c.push(FIG("e2_reduction_vs_paper.png", 4.6));
 c.push(CAP("Figure 3. Training-time reduction of Spark-IRFA relative to one core (ours) and to one worker node (paper)."));
 c.push(P(
-  "Spark-IRFA training time {{E2_TREND}} as cores were added. The reduction relative to one core was {{E2_RED_2}}%, {{E2_RED_4}}% and {{E2_RED_8}}% with 2, 4 and 8 cores, whereas the paper reports 51.48%, 66.08% and 73.26% with 2, 3 and 4 worker nodes. Parallel efficiency at 8 cores was {{E2_EFF_8}}%. Spark-RFA alone was reduced by {{E2_RFRED_8}}% at 8 cores. At {{E2_MAXC}} cores the IRF needed {{E2_OVERHEAD_MAX}}% more training time than the plain Spark-RFA, against 85.98% in the paper on Dataset 1 with four workers. The comparison is qualitative: one core of a laptop is not one eight-core node, and all cores share one memory bus and one disk."));
+  "Spark-IRFA training time {{E2_TREND}} as cores were added. The reduction relative to one core was {{E2_RED_2}}%, {{E2_RED_3}}% and {{E2_RED_4}}% with 2, 3 and 4 cores, whereas the paper reports 51.48%, 66.08% and 73.26% with 2, 3 and 4 worker nodes. Parallel efficiency at 4 cores was {{E2_EFF_4}}%. Spark-RFA alone was reduced by {{E2_RFRED_4}}% at 4 cores. At {{E2_MAXC}} cores the IRF needed {{E2_OVERHEAD_MAX}}% more training time than the plain Spark-RFA, against 85.98% in the paper on Dataset 1 with four workers. The comparison is qualitative: one virtual CPU is not one eight-core node, and all cores share one memory bus and one disk."));
 c.push(FIG("e2_training_time.png", 4.2));
 c.push(CAP("Figure 4. E2 training time of Spark-RFA and Spark-IRFA against the number of executor cores."));
 c.push(H2("4.4 E3 – Effect of data size"));
-c.push(TCAP("Table 8. E3 results with 100 trees on nested subsets of the enlarged dataset."));
+c.push(TCAP("Table 9. E3 results with 100 trees on nested subsets of the enlarged dataset."));
 c.push(T(["Subset", "Raw size (GB)", "Training rows", "Spark-RF acc. (%)", "Spark-IRF acc. (%)", "IRF trees", "Train Spark-RF (s)", "Train Spark-IRF (s)"], [
   ["25%", "{{E3_GB_25}}", "{{E3_N_25}}", "{{E3_RF_ACC_25}}", "{{E3_IRF_ACC_25}}", "{{E3_IRF_NTREES_25}}", "{{E3_RF_TRAIN_25}}", "{{E3_IRF_TRAIN_25}}"],
   ["50%", "{{E3_GB_50}}", "{{E3_N_50}}", "{{E3_RF_ACC_50}}", "{{E3_IRF_ACC_50}}", "{{E3_IRF_NTREES_50}}", "{{E3_RF_TRAIN_50}}", "{{E3_IRF_TRAIN_50}}"],
@@ -277,7 +294,7 @@ c.push(CAP("Figure 5. E3 accuracy and training time against dataset size."));
 c.push(P(
   "As the data grew from {{E3_GB_25}} to {{E3_GB_100}} GB, Spark-IRFA accuracy {{E3_TREND}} ({{E3_DIFF}} pp). The paper reports a rise from 97.09% to 98.12% between 5.6 and 20.4 GB; at 5.6 GB our value differs from the paper's by {{E3_GAP_56}} pp. Spark-IRFA training time went from {{E3_IRF_TRAIN_25}} s to {{E3_IRF_TRAIN_100}} s and Spark-RFA from {{E3_RF_TRAIN_25}} s to {{E3_RF_TRAIN_100}} s; for a fixed depth, the cost of tree induction is expected to grow roughly linearly with the number of training rows."));
 c.push(H2("4.5 Summary of the comparison"));
-c.push(TCAP("Table 9. Claim-by-claim comparison with the original study."));
+c.push(TCAP("Table 10. Claim-by-claim comparison with the original study."));
 c.push(T(["Claim of the paper", "Paper", "This reproduction", "Verdict"], [
   ["IRF is more accurate than Spark RF (200 trees)", "+0.71 pp", "{{E1_D_IRF_RF_200}} pp", "{{V_A}}"],
   ["Accuracy level of all methods (200 trees)", "96.4–97.2%", "{{E1_PY_200_ACC}} / {{E1_RF_200_ACC}} / {{E1_IRF_200_ACC}}%", "{{V_B}}"],
@@ -296,11 +313,11 @@ c.push(H2("5.2 Differences and their likely causes"));
 c.push(P(
   "**Under-specified preprocessing.** The paper does not give the window length, the overlap step, the wavelet basis, the decomposition level or its exact class list, and its Table 3 describes the forest parameters only qualitatively. Each of these choices changes the feature space and therefore the absolute accuracy, so the gap of {{E1_GAP_RF_200}} pp between our Spark-RFA and the paper's at 200 trees cannot be attributed to the method alone."));
 c.push(P(
-  "**The size of the IRF gain.** The paper's main accuracy claim is a gain of 0.71 pp at 200 trees; ours is {{E1_D_IRF_RF_200}} pp. Differences of a few tenths of a point are close to the variation caused by the random seed alone, and the paper reports single runs without confidence intervals. Two implementation details matter here. First, MLlib forests vote by averaging the class probabilities of the trees, while the IRF of the paper is described with majority voting; we rebuilt the IRF as an MLlib model so that it is diagnosed by the same engine, which makes the timing comparison fair but means that our IRF also uses probability averaging. Second, the filter rule and similarityFilter are free parameters: Table 6 shows that the number of kept trees, and therefore both speed and accuracy, depend directly on the threshold. In our runs {{E1_SIM_ZERO_FRAC_100}}% of the tree pairs had zero similarity and the median of the remaining pairs was {{E1_SIM_NZ_MEDIAN_100}}, which can be compared with the paper's own remark that vibration-signal trees are not very similar and that a small threshold should be chosen", fnWan(37874), "."));
+  "**The size of the IRF gain.** The paper's main accuracy claim is a gain of 0.71 pp at 200 trees; ours is {{E1_D_IRF_RF_200}} pp. Differences of a few tenths of a point are close to the variation caused by the random seed alone, and the paper reports single runs without confidence intervals. Two implementation details matter here. First, MLlib forests vote by averaging the class probabilities of the trees, while the IRF of the paper is described with majority voting; we rebuilt the IRF as an MLlib model so that it is diagnosed by the same engine, which makes the timing comparison fair but means that our IRF also uses probability averaging. Second, the filter rule and similarityFilter are free parameters: Table 7 shows that the number of kept trees, and therefore both speed and accuracy, depend directly on the threshold. In our runs {{E1_SIM_ZERO_FRAC_100}}% of the tree pairs had zero similarity and the median of the remaining pairs was {{E1_SIM_NZ_MEDIAN_100}}, which can be compared with the paper's own remark that vibration-signal trees are not very similar and that a small threshold should be chosen", fnWan(37874), "."));
 c.push(P(
   "**Equation inconsistencies.** Equation (2) and the line of Algorithm 1 that computes path similarity are written differently, and the text does not say whether the split direction matters when two nodes are compared. We implemented Equation (2) literally, counting the root and the matching leaf as similar and comparing nodes position by position, and documented this choice in the code. A different reading would change the similarity values and therefore the trees that survive."));
 c.push(P(
-  "**Cores versus nodes.** E2 replaces worker nodes by cores of one laptop. Additional cores share the memory bandwidth, the last-level cache and the turbo budget of a single processor, and thermal throttling can lower the clock as more cores become busy, so speed-ups are expected to flatten earlier than on a cluster. On the other hand, local mode has no network shuffle and no HDFS replication, which removes the communication and serialisation overheads that the paper measured at 5.70% of training time", fnWan(37877), ". The two effects push in opposite directions, so only the trend, not the exact percentages, can be compared."));
+  "**Cores versus nodes.** E2 replaces worker nodes by virtual CPUs of one machine. Additional cores share the memory bandwidth and the last-level cache of a single processor, and on a shared cloud host the vCPUs may be hyper-threads of the same physical cores, so speed-ups are expected to flatten earlier than on a cluster. On the other hand, local mode has no network shuffle and no HDFS replication, which removes the communication and serialisation overheads that the paper measured at 5.70% of training time", fnWan(37877), ". The two effects push in opposite directions, so only the trend, not the exact percentages, can be compared."));
 c.push(P(
   "**Overlapping windows and data leakage.** With an overlap of up to {{OVERLAP_PCT}}%, neighbouring windows are almost identical. A random 6:2:2 split, as used in the paper, therefore places near-copies of test windows in the training set, which can inflate accuracy and is a known source of over-optimistic results in machine-learning studies", fn(['Kapoor, Sayash; and Arvind Narayanan, "Leakage and the Reproducibility Crisis in Machine-Learning-Based Science", ', { t: "Patterns", i: true }, " vol. 4, no. 9 (2023), p. 1. Available at: ", { link: "https://doi.org/10.1016/j.patter.2023.100804" }, "."]),
   ". We kept the paper's random split to stay faithful to it, but the reported accuracies, the paper's and ours alike, should be read as within-recording accuracy rather than generalisation to new bearings. The same argument explains why the enlarged dataset adds volume but little new information, which limits what E3 can show."));
@@ -309,11 +326,11 @@ c.push(P(
 c.push(H2("5.3 Challenges"));
 c.push(BUL("**Missing code and parameters.** The IRF had to be implemented from prose, pseudo-code and equations that do not fully agree; every gap was closed with an explicit, configurable assumption (Table 3)."));
 c.push(BUL("**Access to MLlib trees.** PySpark gives no direct access to node structure. Reading the saved Parquet node table solved this, and the per-tree agreement check confirmed that the exported trees predict exactly like MLlib's."));
-c.push(BUL("**Memory on a 16 GB laptop.** WSL2 sees only half of the host memory by default; a .wslconfig limit of 12 GB, a 6 GB Spark driver, binary storage of windows and Arrow batches of 1,000 rows were needed to process the 5.6 GB dataset without running out of memory."));
+c.push(BUL("**Limited memory and disk.** The runner has about 16 GB of RAM and limited disk space; a 6 GB Spark driver, binary storage of the windows, Arrow batches of 1,000 rows and deleting the raw windows after feature extraction were needed to process the 5.6 GB dataset."));
 c.push(BUL("**Cost of the similarity matrix.** Comparing every path of every tree with every path of every other tree grows with the square of both the number of trees and the number of paths. Vectorising the comparison with NumPy and distributing rows over the cores kept it to {{E1_IRF_100_SIM}} s for 100 trees."));
 c.push(H2("5.4 Limitations"));
 c.push(P(
-  "The reproduction covers only Dataset 1; the 11.2 and 20.4 GB datasets would not fit comfortably in the memory of one laptop, and the cluster-level effects of the paper (network, HDFS, executor placement) are absent. Timings depend on the machine's power mode and on background load, and were measured {{NSEEDS}} time(s) per setting, so small differences in time should not be over-interpreted. Several parameters had to be assumed, and the threshold sweep shows that the IRF is sensitive to at least one of them. Finally, the features and the split follow the paper, so the leakage concern raised above applies equally to our numbers."));
+  "The reproduction covers only Dataset 1; the 11.2 and 20.4 GB datasets would not fit comfortably in the memory and disk of one runner, and the cluster-level effects of the paper (network, HDFS, executor placement) are absent. Timings on a shared cloud machine depend on its background load, and were measured {{NSEEDS}} time(s) per setting, so small differences in time should not be over-interpreted. Several parameters had to be assumed, and the threshold sweep shows that the IRF is sensitive to at least one of them. Finally, the features and the split follow the paper, so the leakage concern raised above applies equally to our numbers."));
 c.push(H2("5.5 Reproducibility assessment"));
 c.push(P(
   "The data are public and the method is described in enough detail to rebuild it, so the study is reproducible at the level of methodology. It is only partially reproducible at the level of numbers, because essential settings are missing, the equations and the summary ratios contain inconsistencies, and the code is not available. Publishing the preprocessing parameters, the content of Tables 1 and 3, the split procedure and the code would have removed most of the uncertainty documented here. To avoid the same problem, our repository records every setting in one configuration file, fixes all random seeds, stores raw results as CSV files, and regenerates every table and figure of this report from them."));
@@ -321,7 +338,7 @@ c.push(P(
 // ---------------- 6 conclusion
 c.push(H1("6. Conclusion"));
 c.push(P(
-  "This project reproduced the Spark-based improved random forest of Wan et al. (2021) on a single laptop: the CWRU signals were enlarged to {{RAW_GB}} GB by overlapping sampling, wavelet-packet features were extracted with Spark, and the four IRF stages were implemented in PySpark on top of MLlib. With 200 trees the IRF reached {{E1_IRF_200_ACC}}% accuracy, {{E1_VERDICT_200}} the standard Spark forest, while keeping {{E1_IRF_200_NTREES}} trees; diagnosis became {{E1_DIAGRED_100}}% faster at 100 trees, and training time fell by {{E2_RED_MAX}}% from 1 to {{E2_MAXC}} cores. Of the six claims compared in Table 9, {{V_COUNT}} were reproduced at least qualitatively: the accuracy gain of the IRF ({{V_A}}), the accuracy level ({{V_B}}), the scalability with parallel resources ({{V_C}}), the faster diagnosis ({{V_D}}), the extra training cost ({{V_E}}) and the effect of data size ({{V_F}})."));
+  "This project reproduced the Spark-based improved random forest of Wan et al. (2021) on a single four-core machine: the CWRU signals were enlarged to {{RAW_GB}} GB by overlapping sampling, wavelet-packet features were extracted with Spark, and the four IRF stages were implemented in PySpark on top of MLlib. With 200 trees the IRF reached {{E1_IRF_200_ACC}}% accuracy, {{E1_VERDICT_200}} the standard Spark forest, while keeping {{E1_IRF_200_NTREES}} trees; diagnosis became {{E1_DIAGRED_100}}% faster at 100 trees, and training time fell by {{E2_RED_MAX}}% from 1 to {{E2_MAXC}} cores. Of the six claims compared in Table 10, {{V_COUNT}} were reproduced at least qualitatively: the accuracy gain of the IRF ({{V_A}}), the accuracy level ({{V_B}}), the scalability with parallel resources ({{V_C}}), the faster diagnosis ({{V_D}}), the extra training cost ({{V_E}}) and the effect of data size ({{V_F}})."));
 c.push(P(
   "The main lessons are that a reproduction is only as good as the information published with the original work, that free parameters such as similarityFilter directly decide how many trees the IRF keeps and therefore its speed and accuracy, and that overlapping-window datasets need careful splitting before high accuracies can be trusted. A natural next step would be to repeat the experiments on a real multi-node cluster and with a split by recording, so that both the scalability and the generalisation claims can be tested more strictly."));
 
@@ -350,12 +367,31 @@ c.push(P("External software used and acknowledged: Apache Spark / PySpark (Apach
 c.push(H1("Appendix B. Division of Work"));
 c.push(T(["Student (name / ID)", "Assigned responsibility", "Tasks completed", "Individual outputs"], [
   ["{{AUTHOR}} / {{STUDENT_ID}}", "All roles (single-student team, approved reduced scope)",
-    "Paper analysis; WSL2/Spark environment; CWRU download; overlapping sampling; wavelet-packet features; Spark RF; IRF implementation (Steps 2–7); experiments E1–E3; comparison and analysis; testing; documentation",
+    "Paper analysis; Spark environment and GitHub Actions workflow; CWRU download; overlapping sampling; wavelet-packet features; Spark RF; IRF implementation (Steps 2–7); experiments E1–E3; comparison and analysis; testing; documentation",
     "GitHub repository; proposal; this report; presentation slides"],
 ], [1.5, 1.6, 2.9, 1.6]));
 c.push(H1("Appendix C. Reflection"));
 c.push(P(
-  "Working alone on a task designed for a team forced me to own every layer of the reproduction, from configuring Java and Spark inside WSL2 to translating the paper's equations into vectorised code. The most valuable lesson was how much a published result depends on details that are easy to leave out of a paper: the similarity threshold and the way overlapping windows are split both affect what can be observed. I also learned to treat timings with care, since local-mode Spark on a laptop behaves differently from a cluster, and to verify each component separately, for example by checking that the exported trees predict exactly like MLlib's, before trusting end-to-end numbers."));
+  "Working alone on a task designed for a team forced me to own every layer of the reproduction, from configuring Java and Spark to translating the paper's equations into vectorised code. The most valuable lesson was how much a published result depends on details that are easy to leave out of a paper: the similarity threshold and the way overlapping windows are split both affect what can be observed. I also learned to treat timings with care, since local-mode Spark on one machine behaves differently from a cluster, and to verify each component separately, for example by checking that the exported trees predict exactly like MLlib's, before trusting end-to-end numbers."));
+
+c.push(H1("Appendix D. Code Structure and How to Reproduce"));
+c.push(P("The repository is a Python package with numbered scripts; every setting is in config.yaml and every result is written to results/ as CSV or JSON. The GitHub Actions workflow .github/workflows/experiments.yml runs the complete pipeline on a clean machine and commits the results, figures and this report back to the repository."));
+c.push(T(["File", "Purpose"], [
+  ["config.yaml", "all parameters of the reproduction; assumptions are marked"],
+  ["src/irf_repro/cwru.py", "CWRU file catalogue, .mat loading, overlapping-window positions"],
+  ["src/irf_repro/wpd.py", "vectorised wavelet-packet relative-energy features"],
+  ["src/irf_repro/trees.py", "export of MLlib trees from Parquet, NumPy prediction, path extraction"],
+  ["src/irf_repro/irf.py", "IRF Steps 2–7: filter, Equations (1)–(3), grouping, selection, voting"],
+  ["src/irf_repro/spark_jobs.py", "Spark session, splits, Spark RF, distributed IRF, sub-model rebuild"],
+  ["src/irf_repro/experiment.py", "one experimental run of the three methods with timings"],
+  ["scripts/00–03", "environment record, download, overlapping sampling, feature extraction"],
+  ["scripts/04–06", "experiments E1, E2 and E3"],
+  ["scripts/07–08", "figures and generation of the report and slides from the results"],
+  ["tests/test_core.py", "unit tests of tree export, IRF logic and wavelet features"],
+], [2.4, 5.2]));
+c.push(P("To reproduce: install Python 3.11, Java 17 and requirements.txt, then run bash scripts/run_all.sh, or start the experiments workflow from the Actions tab of the repository."));
+c.push(H1("Declaration on the Use of Artificial Intelligence"));
+c.push(P("In line with the module's policy, I declare that a generative AI assistant (Claude, Anthropic) was used during this assignment. It assisted in drafting and debugging the Python/PySpark code and the GitHub Actions workflow, in structuring this report and the presentation, and in editing the English text. The selection of the paper, the scope, the decisions on assumptions and the interpretation were reviewed and approved by me. All experimental results reported in Sections 4 and 5 were produced by actually executing the code in the repository; no number was generated or estimated by the AI tool. I have checked the content and take full responsibility for this submission."));
 
 // ================================================================== document
 const doc = new Document({

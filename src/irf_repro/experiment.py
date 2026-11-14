@@ -52,12 +52,12 @@ def sklearn_rf(cfg, n_trees, seed, n_features):
     )
 
 
-def run_setting(cfg, *, experiment, n_trees, seed, cores, fraction, methods, out_csv, spark=None):
+def run_setting(cfg, *, experiment, n_trees, seed, cores, fraction, methods, out_csv, spark=None, split="random"):
     own_spark = spark is None
     if own_spark:
         spark = sj.make_spark(cfg, cores=cores, app=f"{experiment}-t{n_trees}-c{cores}")
     try:
-        splits, fcols = sj.load_splits(spark, cfg, fraction=fraction, seed=cfg["split"]["seed"])
+        splits, fcols = sj.load_splits(spark, cfg, fraction=fraction, seed=cfg["split"]["seed"], mode=split)
         n = {k: splits[k].count() for k in splits}
         raw_gb = (n["train"] + n["val"] + n["test"]) * cfg["data"]["window_length"] * 8 / 1e9
         base = {

@@ -41,11 +41,15 @@ def feature_columns(df) -> list[str]:
     return sorted(cols, key=lambda c: int(c[1:]))
 
 
-def load_splits(spark, cfg: dict, fraction: float = 1.0, seed: int | None = None):
+def load_splits(spark, cfg: dict, fraction: float = 1.0, seed: int | None = None, mode: str = "random"):
     """Read the feature table, assign a deterministic 6:2:2 split and return cached DataFrames.
 
     The split is a hash of (file_id, win_idx, seed), so Spark and scikit-learn see exactly the
     same rows, and the subsets used in E3 are nested (1.4 GB subset is inside 2.8 GB subset).
+
+    mode = "blocked" (supplementary check, E1b): every signal is split by time instead,
+    first 60 % -> train, next 20 % -> validation, last 20 % -> test, and windows that would
+    overlap a boundary (starting less than `gap` of the signal before it) are dropped.
     """
     from pyspark.ml.feature import VectorAssembler
     from pyspark.sql import functions as F
@@ -58,7 +62,14 @@ def load_splits(spark, cfg: dict, fraction: float = 1.0, seed: int | None = None
     bucket = F.pmod(F.xxhash64("file_id", "win_idx", F.lit(seed)), F.lit(100)).cast("int")
     tr = int(round(cfg["split"]["train"] * 100))
     va = int(round((cfg["split"]["train"] + cfg["split"]["validation"]) * 100))
-    df = df.withColumn("split", F.when(bucket < tr, "train").when(bucket < va, "val").otherwise("test"))
+    if mode == "blocked":
+        gap = 0.02                                   # 2 % of a signal > one 2,048-sample window
+        p_tr, p_va = cfg["split"]["train"], cfg["split"]["train"] + cfg["split"]["validation"]
+        pos = F.col("pos")
+        df = df.where(~(((pos >= p_tr - gap) & (pos < p_tr)) | ((pos >= p_va - gap) & (pos < p_va))))
+        df = df.withColumn("split", F.when(pos < p_tr, "train").when(pos < p_va, "val").otherwise("test"))
+    else:
+        df = df.withColumn("split", F.when(bucket < tr, "train").when(bucket < va, "val").otherwise("test"))
     fcols = feature_columns(df)
     df = VectorAssembler(inputCols=fcols, outputCol="features").transform(df)
     df = df.withColumn("label", F.col("label").cast("double"))

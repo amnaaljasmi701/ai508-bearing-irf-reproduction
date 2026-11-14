@@ -15,7 +15,7 @@ from .paper_values import PAPER
 
 DASH = "–"
 TREES = (20, 100, 200)
-CORES = (1, 2, 4, 8)
+CORES = (1, 2, 3, 4)
 FRACS = (0.25, 0.5, 1.0)
 THRESH = (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
 MKEY = {"Python-RFA": "PY", "Spark-RFA": "RF", "Spark-IRFA": "IRF"}

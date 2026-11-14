@@ -15,10 +15,11 @@ def main():
     ap.add_argument("--fraction", type=float, default=1.0)
     ap.add_argument("--methods", default="python,spark,irf")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--split", default="random", choices=["random", "blocked"])
     a = ap.parse_args()
     cfg = load_config()
     run_setting(cfg, experiment=a.experiment, n_trees=a.trees, seed=a.seed, cores=a.cores,
-                fraction=a.fraction, methods=a.methods.split(","), out_csv=a.out)
+                fraction=a.fraction, methods=a.methods.split(","), out_csv=a.out, split=a.split)
 
 
 if __name__ == "__main__":
