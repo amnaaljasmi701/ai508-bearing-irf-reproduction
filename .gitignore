@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+data_smoke/
+results_smoke/
+figures_smoke/
+spark-warehouse/
+metastore_db/
+derby.log
+*.part
+report/~$*
+node_modules/

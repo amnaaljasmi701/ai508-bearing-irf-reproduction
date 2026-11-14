@@ -1,0 +1,6 @@
+# Copy this file to  C:\Users\<your-windows-user>\.wslconfig  then run  wsl --shutdown  in PowerShell.
+# By default WSL2 only sees 50 % of the RAM (8 GB on a 16 GB laptop); Spark needs more head-room.
+[wsl2]
+memory=12GB
+processors=8
+swap=8GB

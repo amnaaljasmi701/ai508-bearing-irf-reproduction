@@ -1,0 +1,66 @@
+# SMOKE TEST: tiny version of config.yaml to check the whole pipeline in a few minutes.
+# Usage:  IRF_CONFIG=config_smoke.yaml bash scripts/run_all.sh
+# Central configuration for the reproduction of Wan et al. (2021), IEEE Access 9:37866-37882.
+# Every script reads this file. Values marked "assumption" are not stated in the paper.
+
+paths:
+  raw_mat_dir: data/cwru_mat            # downloaded CWRU .mat files
+  raw_windows: data_smoke/windows.parquet     # enlarged dataset (overlapping windows, raw signal)
+  features: data_smoke/features.parquet       # wavelet-packet feature vectors
+  results_dir: results_smoke
+  figures_dir: figures_smoke
+  tmp_dir: data_smoke/tmp                     # temporary model exports
+
+data:
+  sampling: 12k_drive_end               # 12 kHz drive-end bearing data (assumption: paper Table 1 not available)
+  loads_hp: [0, 1, 2, 3]
+  window_length: 2048                   # samples per window (assumption)
+  target_gb: 0.05                       # Dataset 1 size in the paper (raw-equivalent size, float64)
+  normal_downsample_factor: 1           # set to 4 if you treat the normal baseline as 48 kHz
+  chunk_windows: 1000                   # windows generated per Spark task
+
+features:
+  standardize: true                     # z-score each window before decomposition (paper: "standardized")
+  wavelet: db4                          # assumption
+  level: 3                              # 2^3 = 8 terminal nodes -> 8 relative-energy features (assumption)
+  mode: periodization                   # energy-preserving for orthogonal wavelets
+
+split:
+  train: 0.6                            # paper: 6:2:2 (train / validation / test)
+  validation: 0.2
+  test: 0.2
+  seed: 42
+
+spark:
+  driver_memory: 6g                     # keep below the WSL2 memory limit (see setup/.wslconfig)
+  num_partitions: 16                    # fixed for all core counts so that only the cores change
+  arrow_batch: 1000
+
+rf:
+  impurity: entropy                     # paper
+  max_depth: 10                         # assumption (paper gives no number)
+  max_bins: 32
+  min_instances_per_node: 1
+  feature_subset: sqrt                  # ceil(sqrt(8)) = 3 features per split in Spark; same value used in scikit-learn
+  subsampling_rate: 1.0
+  bootstrap: true
+
+irf:
+  filter_rule: mean                     # keep trees whose validation accuracy >= mean accuracy (assumption)
+  alpha: 0.2                            # node-similarity tolerance, paper Eq. (1): "typically 0.2"
+  similarity_threshold: 0.5             # similarityFilter: paper suggests 0.5-0.9 and says a small value was chosen
+  engine: jvm                           # jvm = sub-forest rebuilt as an MLlib model; python = hard majority vote
+
+experiments:
+  seeds: [42]                           # add more seeds (e.g. [42, 7, 2026]) for mean +/- std
+  e1_trees: [20, 50]
+  e2_cores: [1, 2]
+  e2_trees: 20
+  e2_repeats: 1
+  e3_fractions: [0.25, 0.5, 1.0]        # 1.4, 2.8 and 5.6 GB
+  e3_trees: 20
+
+report:                                 # used only by scripts/08_build_report.py
+  author: "[Name]"
+  student_id: "[ID]"
+  github_url: "https://github.com/<your-account>/ai508-bearing-irf-reproduction"

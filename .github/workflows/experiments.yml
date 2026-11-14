@@ -1,0 +1,156 @@
+# Runs the whole reproduction on GitHub-hosted runners.
+# Start it from the Actions tab ("Run workflow"), or push a commit whose message contains
+# "[run smoke]" (5-minute test) or "[run full]" (full 5.6 GB experiments).
+name: experiments
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "smoke = tiny test, full = 5.6 GB experiments"
+        type: choice
+        options: [smoke, full]
+        default: smoke
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: experiments
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  mode:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.m.outputs.mode }}
+    steps:
+      - id: m
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          MODE=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then MODE="${{ inputs.mode }}"; fi
+          case "$MSG" in *"[run full]"*) MODE=full;; *"[run smoke]"*) MODE=smoke;; esac
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE"
+
+  data:
+    needs: mode
+    if: needs.mode.outputs.mode != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Select configuration
+        run: |
+          if [ "${{ needs.mode.outputs.mode }}" = "full" ]; then
+            echo "IRF_CONFIG=config.yaml" >> $GITHUB_ENV; echo "SUFFIX=" >> $GITHUB_ENV
+          else
+            echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV
+          fi
+      - name: Install packages
+        run: pip install -r requirements.txt && pip install -e .
+      - name: Unit tests
+        run: python -m pytest -q tests
+      - name: Environment
+        run: python scripts/00_check_env.py && df -h . && nproc && free -g
+      - name: Download CWRU
+        run: python scripts/01_download_cwru.py
+      - name: Overlapping sampling (Spark)
+        run: python scripts/02_make_dataset.py
+      - name: Wavelet-packet features (Spark)
+        run: python scripts/03_extract_features.py
+      - name: Free disk (raw windows no longer needed)
+        run: rm -rf data${SUFFIX}/windows.parquet data${SUFFIX}/tmp/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: features
+          path: |
+            data${{ env.SUFFIX }}/features.parquet
+            results${{ env.SUFFIX }}/
+          retention-days: 5
+
+  experiment:
+    needs: [mode, data]
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        exp: [e1, e2, e3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Select configuration
+        run: |
+          if [ "${{ needs.mode.outputs.mode }}" = "full" ]; then
+            echo "IRF_CONFIG=config.yaml" >> $GITHUB_ENV; echo "SUFFIX=" >> $GITHUB_ENV
+          else
+            echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV
+          fi
+      - run: pip install -r requirements.txt && pip install -e .
+      - uses: actions/download-artifact@v4
+        with: { name: features, path: . }
+      - name: Run ${{ matrix.exp }}
+        run: |
+          case "${{ matrix.exp }}" in
+            e1) python scripts/04_run_e1_accuracy.py --fresh ;;
+            e2) python scripts/05_run_e2_scalability.py --fresh ;;
+            e3) python scripts/06_run_e3_datasize.py --fresh ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-${{ matrix.exp }}
+          path: results${{ env.SUFFIX }}/${{ matrix.exp }}_*.csv
+          retention-days: 5
+
+  finalize:
+    needs: [mode, data, experiment]
+    if: always() && needs.data.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - name: Select configuration
+        run: |
+          if [ "${{ needs.mode.outputs.mode }}" = "full" ]; then
+            echo "IRF_CONFIG=config.yaml" >> $GITHUB_ENV; echo "SUFFIX=" >> $GITHUB_ENV
+          else
+            echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV
+          fi
+      - run: pip install pandas numpy matplotlib PyYAML
+      - uses: actions/download-artifact@v4
+        with: { name: features, path: . }
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: results-*
+          path: results${{ env.SUFFIX }}
+          merge-multiple: true
+      - name: Figures and report
+        run: |
+          rm -rf data${SUFFIX}
+          python scripts/07_make_figures.py
+          python scripts/08_build_report.py --outdir report${SUFFIX}
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f results${SUFFIX} figures${SUFFIX} report${SUFFIX} || true
+          git commit -m "Add ${{ needs.mode.outputs.mode }} experiment results" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
