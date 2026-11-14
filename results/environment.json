@@ -1,0 +1,19 @@
+{
+  "os": "Linux-7.0.0-1019-azure-x86_64-with-glibc2.43",
+  "kernel": "7.0.0-1019-azure",
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "logical_cores": 4,
+  "ram_gb_visible": 15.6,
+  "python": "3.11.18",
+  "java": "openjdk version \"17.0.21\" 2026-10-20",
+  "pyspark": "3.5.3",
+  "numpy": "1.26.4",
+  "pandas": "2.2.3",
+  "pyarrow": "17.0.0",
+  "scipy": "1.17.1",
+  "pywt": "1.8.0",
+  "sklearn": "1.9.1",
+  "spark_driver_memory": "6g",
+  "spark_runtime": "3.5.3",
+  "spark_smoke_test": true
+}
