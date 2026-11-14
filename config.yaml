@@ -52,7 +52,7 @@ irf:
 experiments:
   seeds: [42]                           # add more seeds (e.g. [42, 7, 2026]) for mean +/- std
   e1_trees: [20, 100, 200]
-  e2_cores: [1, 2, 4, 8]
+  e2_cores: [1, 2, 3, 4]                # GitHub runner has 4 vCPUs; mirrors the paper's 1-4 worker nodes
   e2_trees: 100
   e2_repeats: 1
   e3_fractions: [0.25, 0.5, 1.0]        # 1.4, 2.8 and 5.6 GB
