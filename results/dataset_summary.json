@@ -49,13 +49,13 @@
     "236": 122281,
     "237": 121991
   },
-  "generation_s": 25.294387185000005,
+  "generation_s": 26.96827254899999,
   "cores": "*",
   "n_feature_rows": 341800,
   "n_features": 8,
   "wavelet": "db4",
   "level": 3,
-  "feature_extraction_s": 15.274757470000011,
+  "feature_extraction_s": 15.78460617799999,
   "rows_per_class": {
     "9": 34180,
     "5": 34180,
