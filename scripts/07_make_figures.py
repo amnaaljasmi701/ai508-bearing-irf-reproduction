@@ -102,6 +102,7 @@ def fig_e2(df, out):
     p = PAPER["e2_train_reduction_nodes"]
     ax.plot(list(p.keys()), list(p.values()), marker="D", ls="--", color=COL["paper"],
             label="Paper: reduction vs 1 worker node")
+    ax.set_xticks([1, 2, 3, 4])
     ax.set_xlabel("Cores (ours) / worker nodes (paper)")
     ax.set_ylabel("Training-time reduction (%)")
     ax.set_title("E2 - Spark-IRFA scalability compared with the paper", loc="left", color=INK)
@@ -122,6 +123,13 @@ def fig_e3(df, out):
     axes[1].set_xlabel("Dataset size (GB, raw)")
     axes[1].set_ylabel("Training time (s)")
     axes[1].set_title("E3 - Training time vs data size", loc="left", color=INK, fontsize=10)
+    lo, hi = axes[0].get_ylim()
+    mid = (lo + hi) / 2
+    if hi - lo < 1.0:                      # keep at least a 1 pp range so tiny differences are not exaggerated
+        axes[0].set_ylim(mid - 0.5, mid + 0.5)
+    ticks = sorted(m.raw_gb.unique())
+    for ax in axes:
+        ax.set_xticks(ticks, [f"{t:.1f}" for t in ticks])
     axes[0].legend(fontsize=8)
     save(fig, out, "e3_datasize.png")
 

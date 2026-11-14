@@ -16,7 +16,8 @@ The original code is not published; everything here is a re-implementation from 
 | Experiment | Paper | Here |
 |---|---|---|
 | E1 accuracy | Python-RFA vs Spark-RFA vs Spark-IRFA, 20–200 trees | same three methods, 20 / 100 / 200 trees, 5.6 GB dataset |
-| E2 scalability | 1–4 worker nodes | 1 / 2 / 4 / 8 Spark executor cores (`local[c]`) as a proxy |
+| E2 scalability | 1–4 worker nodes | 1 / 2 / 3 / 4 Spark executor cores (`local[c]`) as a proxy |
+| E1b (supplementary) | – | E1 with a time-blocked split, to test overlap leakage |
 | E3 data size | 5.6 / 11.2 / 20.4 GB | nested subsets of 1.4 / 2.8 / 5.6 GB |
 
 ## Repository layout
@@ -51,7 +52,14 @@ report/                   report and slide templates (+ generated files)
 results/  figures/        produced by the scripts (commit them)
 ```
 
-## Setup (Windows 11 + WSL2 Ubuntu 22.04)
+## Running on GitHub Actions (how the reported results were produced)
+
+The workflow `.github/workflows/experiments.yml` runs the whole pipeline on a GitHub-hosted
+runner (4 vCPUs, 16 GB RAM) and commits `results/`, `figures/` and the generated report back to
+the repository. Start it from the **Actions** tab (*Run workflow*, mode `smoke`, `full` or `extra`)
+or push a commit whose message contains `[run smoke]`, `[run full]` or `[run extra]` (E1b only).
+
+## Local setup (Windows 11 + WSL2 Ubuntu 22.04)
 
 1. In PowerShell: `wsl --install -d Ubuntu-22.04` (skip if installed).
 2. Copy `setup/.wslconfig` to `C:\Users\<you>\.wslconfig`, then `wsl --shutdown` and reopen Ubuntu.

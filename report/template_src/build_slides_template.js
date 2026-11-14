@@ -198,7 +198,9 @@ function callout(s, big, label, x, y, color) {
     "Eq. (2) and Algorithm 1 disagree; we implemented Eq. (2) literally",
     "MLlib votes by averaging probabilities; paper describes majority voting",
     "Cores ≠ nodes: shared memory bus and cache, no network or HDFS overhead",
-    "Up to {{OVERLAP_PCT}}% overlap + random split → near-duplicate windows in train and test (leakage)",
+    "Accuracy ceiling: all forests > 99.7% → no room for the paper's +0.71 pp IRF gain",
+    "Leakage tested (E1b, time-blocked split): Spark RF still {{B_RF_200_ACC}}% → not caused by overlap",
+    "Likely an easier task: 10 classes, 12 kHz drive end only (paper's Table 1 differs)",
     "Paper's own summary ratios (6.84×, 3.55×) do not match its measured times (≈7.84×, ≈4.5×)",
   ]);
 }
@@ -215,7 +217,7 @@ function callout(s, big, label, x, y, color) {
     "Limitations",
     "- Only Dataset 1 (5.6 GB); no real multi-node cluster",
     "- {{NSEEDS}} seed(s) per setting; cloud timings depend on background load",
-    "- Same random split as the paper, so the leakage concern applies to our numbers too",
+    "- Near-perfect accuracy leaves little room to compare the methods",
   ]);
 }
 
@@ -226,10 +228,11 @@ function callout(s, big, label, x, y, color) {
   callout(s, "−{{E1_DIAGRED_100}}%", "diagnosis time vs Spark RF", 3.7, 1.4, BLUE);
   callout(s, "−{{E2_RED_MAX}}%", "training time, 1 → {{E2_MAXC}} cores", 6.8, 1.4, ORANGE);
   bullets(s, [
-    "{{V_COUNT}} of 6 claims reproduced at least qualitatively (IRF accuracy gain: {{V_A}})",
+    "{{V_COUNT}} of 6 claims reproduced: faster diagnosis, extra training cost, scalability with cores",
+    "IRF accuracy gain not observable: every forest > 99.7% (also with a time-blocked split)",
     "Reproducible in method, only partly in numbers: missing settings, inconsistent equations, no code",
     "Our repository fixes every setting and seed and regenerates all tables and figures from raw CSVs",
-    "Next step: real cluster and a split by recording to test generalisation",
+    "Next step: real cluster and a harder task (e.g. train on some loads, test on others)",
   ], { y: 3.1, h: 3.6 });
   s.addText("Code and results: {{GITHUB_URL}}", { x: 0.6, y: 6.5, w: 12, h: 0.4, fontFace: F, fontSize: 13, color: BLUE, margin: 0 });
 }

@@ -38,7 +38,9 @@ def secs(x):
 
 
 def signed_pp(x):
-    return DASH if x is None or np.isnan(x) else f"{100 * x:+.2f}"
+    if x is None or np.isnan(x):
+        return DASH
+    return "0.00" if abs(100 * x) < 0.005 else f"{100 * x:+.2f}"
 
 
 def compare(a, b, tol=0.0005):
@@ -153,6 +155,22 @@ def build_values(cfg: dict) -> dict:
     rf_trend = [acc[("RF", t)] for t in TREES]
     V["E1_RF_GAIN_TREES"] = signed_pp(rf_trend[-1] - rf_trend[0])
     V["E1_IRF_GAIN_TREES"] = signed_pp(acc[("IRF", 200)] - acc[("IRF", 20)])
+
+    # ---------------------------------------------------------------- E1b (time-blocked split)
+    e1b = _read(os.path.join(res, "e1b_blocked.csv"))
+    accb = {}
+    for t in TREES:
+        for meth, k in MKEY.items():
+            d = _get(e1b, method=meth, n_trees=t)
+            accb[(k, t)] = _mean(d, "accuracy")
+            V[f"B_{k}_{t}_ACC"] = pct(accb[(k, t)])
+        V[f"B_IRF_{t}_NTREES"] = num(_mean(_get(e1b, method="Spark-IRFA", n_trees=t), "final_trees"), 0)
+        V[f"B_D_IRF_RF_{t}"] = signed_pp(accb[("IRF", t)] - accb[("RF", t)])
+        V[f"B_DROP_RF_{t}"] = signed_pp(accb[("RF", t)] - acc[("RF", t)])
+    rowb = e1b.iloc[0] if e1b is not None and len(e1b) else None
+    V["B_N_TRAIN"] = f"{int(rowb.n_train):,}" if rowb is not None else DASH
+    V["B_N_TEST"] = f"{int(rowb.n_test):,}" if rowb is not None else DASH
+    V["B_VERDICT_200"] = compare(accb[("IRF", 200)], accb[("RF", 200)])
 
     # ---------------------------------------------------------------- threshold sweep
     sw = _read(os.path.join(res, "e1_threshold_sweep.csv"))

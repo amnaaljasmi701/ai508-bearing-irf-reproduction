@@ -61,4 +61,4 @@ experiments:
 report:                                 # used only by scripts/08_build_report.py
   author: "[Name]"
   student_id: "[ID]"
-  github_url: "https://github.com/<your-account>/ai508-bearing-irf-reproduction"
+  github_url: "https://github.com/amnaaljasmi701/ai508-bearing-irf-reproduction"
