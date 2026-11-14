@@ -1,125 +1,165 @@
-// Builds report/report_template.docx. {{TOKENS}} are filled from results/ by scripts/08_build_report.py.
+// Builds report/report_template.docx in a two-column journal layout modelled on the original paper
+// (IEEE Access style: sans-serif blue headings, serif body, numbered references).
+// {{TOKENS}} are filled from results/ by scripts/08_build_report.py.
 // Run:  node report/template_src/build_report_template.js
 const fs = require("fs");
 const path = require("path");
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell,
-  WidthType, BorderStyle, ShadingType, ImageRun, FootnoteReferenceRun, ExternalHyperlink,
-  LevelFormat, PageNumber, Footer, TableOfContents,
+  WidthType, BorderStyle, ImageRun, ExternalHyperlink, LevelFormat, PageNumber, Footer, Header,
+  SectionType, TabStopType,
 } = require("docx");
 
 const HERE = __dirname;
-const FONT = "Calibri";
-const PAGE_W = 11906, MARGIN = 1300, CONTENT_W = PAGE_W - 2 * MARGIN;   // A4
+const SERIF = "Times New Roman", SANS = "Arial", BLUE = "1F72B8", GREY = "595959";
+const PAGE_W = 11520, PAGE_H = 15660;                    // 8 x 10.875 in, as the original paper
+const MARGIN_LR = 936, MARGIN_TB = 1080;
+const CONTENT_W = PAGE_W - 2 * MARGIN_LR;                // 9648 twips = 6.7 in
+const COL_GAP = 360, COL_W = (CONTENT_W - COL_GAP) / 2;  // 4644 twips = 3.22 in
 
-// ------------------------------------------------------------------ footnotes
-const W1 = 'Wan, Lanjun; Kun Gong; Gen Zhang; Xinpan Yuan; Changyun Li; and Xiaojun Deng, "An Efficient Rolling Bearing Fault Diagnosis Method Based on Spark and Improved Random Forest Algorithm", ';
-const WS = 'Wan et al., "An Efficient Rolling Bearing Fault Diagnosis Method", ';
-const DOI_W = "https://doi.org/10.1109/ACCESS.2021.3063929";
-const FN = {};
-let fnCount = 0;
-function fn(parts) {             // parts: array of [text, style] or {link}
-  fnCount += 1;
-  FN[fnCount] = { children: [new Paragraph({ children: parts.map(runFromPart(18)) })] };
-  return fnCount;
+const WIDE = new Set(), TCAPS = new Set(), FIGS = new Set(), CAPS = new Set();
+
+// ------------------------------------------------------------------ citations (IEEE numeric, with pages)
+const CITE = { Wan: 1, Breiman: 2, Smith: 3, Lee: 4, Zaharia: 5, Meng: 6, Pedregosa: 7, Kapoor: 8 };
+function fn(parts) {
+  const first = String(parts[0]);
+  const key = Object.keys(CITE).find((k) => first.startsWith(k));
+  const text = parts.map((x) => (typeof x === "string" ? x : x.t || "")).join("");
+  const m = text.match(/(pp?\. [0-9–\-]+)\.?/);
+  return ` [${CITE[key]}${m ? ", " + m[1] : ""}]`;
 }
-function runFromPart(size) {
-  return (p) => {
-    if (typeof p === "string") return new TextRun({ text: p, font: FONT, size });
-    if (p.link) return new ExternalHyperlink({ link: p.link, children: [new TextRun({ text: p.link, style: "Hyperlink", font: FONT, size })] });
-    return new TextRun({ text: p.t, italics: !!p.i, bold: !!p.b, font: FONT, size });
-  };
-}
-const fnWanFull = (page) => fn([W1, { t: "IEEE Access", i: true }, ` vol. 9 (2021), p. ${page}. Available at: `, { link: DOI_W }, "."]);
-const fnWan = (page) => fn([WS, { t: "IEEE Access", i: true }, `, p. ${page}.`]);
+const fnWanFull = (page) => ` [1, p. ${page}]`;
+const fnWan = (page) => ` [1, p. ${page}]`;
 
 // ------------------------------------------------------------------ text helpers
-// Inline markup: *italic*, **bold**, [[fn]] markers are passed as numbers in arrays.
-function runs(text, size = 22) {
+function runs(text, size = 19, font = SERIF) {
   const out = [];
   const re = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
   let last = 0, m;
   while ((m = re.exec(text))) {
-    if (m.index > last) out.push(new TextRun({ text: text.slice(last, m.index), font: FONT, size }));
-    const s = m[0];
-    if (s.startsWith("**")) out.push(new TextRun({ text: s.slice(2, -2), bold: true, font: FONT, size }));
-    else out.push(new TextRun({ text: s.slice(1, -1), italics: true, font: FONT, size }));
-    last = m.index + s.length;
+    if (m.index > last) out.push(new TextRun({ text: text.slice(last, m.index), font, size }));
+    const t = m[0];
+    if (t.startsWith("**")) out.push(new TextRun({ text: t.slice(2, -2), bold: true, italics: true, font, size }));
+    else out.push(new TextRun({ text: t.slice(1, -1), italics: true, font, size }));
+    last = m.index + t.length;
   }
-  if (last < text.length) out.push(new TextRun({ text: text.slice(last), font: FONT, size }));
+  if (last < text.length) out.push(new TextRun({ text: text.slice(last), font, size }));
   return out;
 }
-function P(...items) {           // strings and footnote numbers
-  const children = [];
-  for (const it of items) {
-    if (typeof it === "number") children.push(new FootnoteReferenceRun(it));
-    else children.push(...runs(it));
-  }
-  return new Paragraph({ children, spacing: { after: 120, line: 288 }, alignment: AlignmentType.JUSTIFIED });
+function P(...items) {
+  return new Paragraph({ children: runs(items.join("")), alignment: AlignmentType.JUSTIFIED,
+    indent: { firstLine: 200 }, spacing: { after: 40, line: 240 } });
 }
-const H1 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: t, font: FONT })] });
-const H2 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: t, font: FONT })] });
-const EQ = (t) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 100 },
-  children: [new TextRun({ text: t, font: "Cambria Math", size: 21, italics: true })] });
-const BUL = (t) => new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 60, line: 276 }, children: runs(t) });
-const CAP = (t) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 200 },
-  children: [new TextRun({ text: t, font: FONT, size: 19, italics: true, color: "404040" })] });
-const TCAP = (t) => new Paragraph({ keepNext: true, spacing: { before: 160, after: 80 },
-  children: [new TextRun({ text: t, font: FONT, size: 20, bold: true })] });
+const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+function H1(t) {
+  const m = t.match(/^(\d+)\.\s+(.*)$/);
+  const label = m ? `${ROMAN[+m[1]]}. ${m[2]}` : t;
+  return new Paragraph({ heading: HeadingLevel.HEADING_1, keepNext: true, spacing: { before: 200, after: 80 },
+    children: [new TextRun({ text: label.toUpperCase(), font: SANS, size: 18, bold: true, color: BLUE })] });
+}
+function H2(t) {
+  const m = t.match(/^(\d+)\.(\d+)\s+(.*)$/);
+  const label = m ? `${String.fromCharCode(64 + +m[2])}. ${m[3]}` : t;
+  return new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, spacing: { before: 140, after: 60 },
+    children: [new TextRun({ text: label.toUpperCase(), font: SANS, size: 16, bold: true, color: BLUE })] });
+}
+const EQ = (t) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 60 },
+  children: [new TextRun({ text: t, font: "Cambria Math", size: 16, italics: true })] });
+const BUL = (t) => new Paragraph({ numbering: { reference: "bullets", level: 0 }, alignment: AlignmentType.JUSTIFIED,
+  spacing: { after: 30, line: 240 }, children: runs(t) });
+function capRuns(t, kind) {
+  const m = t.match(/^(Table|Figure)\s+(\d+)\.\s*(.*)$/);
+  if (!m) return [new TextRun({ text: t, font: SANS, size: 15 })];
+  return [new TextRun({ text: `${kind} ${m[2]}. `, font: SANS, size: 15, bold: true, color: BLUE }),
+    new TextRun({ text: m[3], font: SANS, size: 15, bold: kind === "TABLE" })];
+}
+function CAP(t) {
+  const p = new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { before: 40, after: 160 }, children: capRuns(t, "FIGURE") });
+  CAPS.add(p);
+  return p;
+}
+function TCAP(t) {
+  const p = new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 120, after: 60 }, children: capRuns(t, "TABLE") });
+  TCAPS.add(p);
+  return p;
+}
 
-// ------------------------------------------------------------------ tables
-const border = { style: BorderStyle.SINGLE, size: 4, color: "A6A6A6" };
-const borders = { top: border, bottom: border, left: border, right: border };
-function T(header, rows, widths) {
+// ------------------------------------------------------------------ tables (horizontal rules only, IEEE look)
+const RULE = { style: BorderStyle.SINGLE, size: 6, color: "404040" };
+const NONE = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+function T(header, rows, widths, narrow = false) {
+  const W = narrow ? COL_W : CONTENT_W;
   const total = widths.reduce((a, b) => a + b, 0);
-  const cols = widths.map((w) => Math.round((w / total) * CONTENT_W));
-  cols[cols.length - 1] = CONTENT_W - cols.slice(0, -1).reduce((a, b) => a + b, 0);
-  const cell = (text, i, head) => new TableCell({
-    borders, width: { size: cols[i], type: WidthType.DXA },
-    shading: head ? { fill: "DCE6F2", type: ShadingType.CLEAR, color: "auto" } : undefined,
-    margins: { top: 50, bottom: 50, left: 90, right: 90 },
+  const cols = widths.map((w) => Math.floor((w / total) * W));
+  cols[cols.length - 1] = W - cols.slice(0, -1).reduce((a, b) => a + b, 0);
+  const n = rows.length;
+  const cell = (text, i, r) => new TableCell({
+    width: { size: cols[i], type: WidthType.DXA },
+    borders: { left: NONE, right: NONE, top: r === 0 ? RULE : NONE, bottom: r === 0 || r === n ? RULE : NONE },
+    margins: { top: 30, bottom: 30, left: 60, right: 60 },
     children: [new Paragraph({ alignment: i === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
-      children: [new TextRun({ text: String(text), font: FONT, size: 18, bold: head })] })],
+      children: [new TextRun({ text: String(text), font: SANS, size: 14, bold: r === 0 })] })],
   });
-  return new Table({
-    width: { size: CONTENT_W, type: WidthType.DXA }, columnWidths: cols,
-    rows: [new TableRow({ tableHeader: true, children: header.map((h, i) => cell(h, i, true)) }),
-      ...rows.map((r) => new TableRow({ children: r.map((c, i) => cell(c, i, false)) }))],
+  const t = new Table({
+    width: { size: W, type: WidthType.DXA }, columnWidths: cols,
+    rows: [new TableRow({ tableHeader: true, children: header.map((h, i) => cell(h, i, 0)) }),
+      ...rows.map((r, k) => new TableRow({ children: r.map((x, i) => cell(x, i, k + 1)) }))],
   });
+  if (!narrow) WIDE.add(t);
+  return t;
 }
 
 // ------------------------------------------------------------------ figures
-function FIG(name, widthIn) {
-  const file = path.join(HERE, "placeholders", name);
-  const sizes = { "e1_accuracy.png": [6.4, 3.8], "e1_diagnosis_time.png": [6.4, 3.6], "e1_threshold_sweep.png": [6.4, 3.6],
-    "e2_training_time.png": [6.4, 3.8], "e2_reduction_vs_paper.png": [6.4, 3.8], "e3_datasize.png": [8.6, 3.5] };
-  const [w, h] = sizes[name];
-  const wpx = Math.round(widthIn * 96), hpx = Math.round((widthIn * 96 * h) / w);
-  return new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, children: [new ImageRun({
-    type: "png", data: fs.readFileSync(file), transformation: { width: wpx, height: hpx },
-    altText: { title: name, description: `FIG:${name}`, name: name } })] });
+const SIZES = { "e1_accuracy.png": [6.4, 3.8], "e1_diagnosis_time.png": [6.4, 3.6], "e1_threshold_sweep.png": [6.4, 3.6],
+  "e2_training_time.png": [6.4, 3.8], "e2_reduction_vs_paper.png": [6.4, 3.8], "e3_datasize.png": [8.6, 3.5] };
+function FIG(name) {
+  const wide = name === "e3_datasize.png";
+  const widthIn = wide ? 6.2 : 3.2;
+  const [w, h] = SIZES[name];
+  const p = new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 80 }, children: [new ImageRun({
+    type: "png", data: fs.readFileSync(path.join(HERE, "placeholders", name)),
+    transformation: { width: Math.round(widthIn * 96), height: Math.round((widthIn * 96 * h) / w) },
+    altText: { title: name, description: `FIG:${name}`, name } })] });
+  FIGS.add(p);
+  if (wide) WIDE.add(p);
+  return p;
 }
 
-// ================================================================== CONTENT
+// ------------------------------------------------------------------ title block and abstract
+function ABS(...items) {
+  const p = new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { before: 120, after: 100, line: 240 },
+    indent: { left: 160 }, border: { left: { style: BorderStyle.DOTTED, size: 12, color: BLUE, space: 8 } },
+    children: [new TextRun({ text: "ABSTRACT ", font: SANS, size: 17, bold: true, color: BLUE }), ...runs(items.join(""), 17, SANS)] });
+  WIDE.add(p);
+  return p;
+}
+function TB(p) { WIDE.add(p); return p; }
+
+const FONT = SERIF;
+
 const c = [];
 
-// ---------------- title page block
-c.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 600, after: 120 },
-  children: [new TextRun({ text: "AI508 Big Data Technologies and Applications – Assignment 2", font: FONT, size: 22, color: "404040" })] }));
-c.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 },
-  children: [new TextRun({ text: "Reproducing Spark-Based Rolling-Bearing Fault Diagnosis with an Improved Random Forest: A Single-Machine Reproduction of Wan et al. (2021)", font: FONT, size: 34, bold: true })] }));
-c.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 },
-  children: [new TextRun({ text: "{{AUTHOR}} – ID: {{STUDENT_ID}} | Single-student team", font: FONT, size: 22 })] }));
-c.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 },
-  children: [new TextRun({ text: "Module Coordinator: Dr. Ghada Alsuhli", font: FONT, size: 22 })] }));
-c.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 300 },
-  children: [new TextRun({ text: "Repository: ", font: FONT, size: 22 }),
-    new ExternalHyperlink({ link: "{{GITHUB_URL}}", children: [new TextRun({ text: "{{GITHUB_URL}}", style: "Hyperlink", font: FONT, size: 22 })] })] }));
+// ---------------- title block
+c.push(TB(new Paragraph({ spacing: { after: 160 }, border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: BLUE, space: 4 } },
+  children: [new TextRun({ text: "AI508 Big Data Technologies and Applications – Assignment 2 (Reproduction Study)", font: SANS, size: 16, color: GREY })] })));
+c.push(TB(new Paragraph({ spacing: { after: 200 },
+  children: [new TextRun({ text: "Reproducing Spark-Based Rolling Bearing Fault Diagnosis With an Improved Random Forest: A Single-Machine Reproduction of Wan et al. (2021)", font: SANS, size: 40, bold: true, color: BLUE })] })));
+c.push(TB(new Paragraph({ spacing: { after: 60 },
+  children: [new TextRun({ text: "{{AUTHOR}} (ID: {{STUDENT_ID}})", font: SANS, size: 19, bold: true, allCaps: true })] })));
+c.push(TB(new Paragraph({ spacing: { after: 20 },
+  children: [new TextRun({ text: "Single-student team, AI508 Big Data Technologies and Applications. Module coordinator: Dr. Ghada Alsuhli.", font: SANS, size: 15 })] })));
+c.push(TB(new Paragraph({ spacing: { after: 100 },
+  children: [new TextRun({ text: "Code, configuration, results and setup instructions: ", font: SANS, size: 15 }),
+    new ExternalHyperlink({ link: "{{GITHUB_URL}}", children: [new TextRun({ text: "{{GITHUB_URL}}", style: "Hyperlink", font: SANS, size: 15 })] })] })));
 
 // ---------------- abstract
-c.push(H1("Abstract"));
-c.push(P(
+c.push(ABS(
   "Wan et al. (2021) proposed an improved random forest (IRF) for rolling-bearing fault diagnosis that removes low-accuracy trees and trees that vote redundantly, and parallelised the whole method on Apache Spark. On a five-node cluster they reported 97.22% accuracy with 200 trees against 96.51% for the standard Spark random forest, training-time reductions of up to 73.26% with four worker nodes, and a much shorter diagnosis time. This report reproduces three parts of that study on a single machine, a four-core GitHub Actions runner. The Case Western Reserve University (CWRU) vibration signals were enlarged by overlapping sampling to a {{RAW_GB}} GB dataset of {{N_WINDOWS}} windows, wavelet-packet features were extracted with Spark, and the IRF steps (tree filtering, path extraction, tree-similarity matrix and tree selection) were re-implemented in PySpark because the original code is not published. With 200 trees our Spark-IRFA reached {{E1_IRF_200_ACC}}% test accuracy, {{E1_VERDICT_200}} Spark-RFA ({{E1_RF_200_ACC}}%), while keeping {{E1_IRF_200_NTREES}} of the 200 trees. Increasing Spark executor cores from 1 to {{E2_MAXC}}, used as a proxy for worker nodes, reduced Spark-IRFA training time by {{E2_RED_MAX}}%, and the smaller forest cut diagnosis time by {{E1_DIAGRED_100}}% at 100 trees. All forests exceeded 99.7% accuracy, also with a time-blocked split that rules out leakage between overlapping windows, which leaves no room to observe the accuracy gain claimed for the IRF. Exact values differ from the paper because the paper leaves the wavelet settings, tree depth and similarity threshold unspecified, and because one machine is not a cluster. The study is therefore only partially reproducible from its text alone."));
+
+c.push(TB(new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 200 }, indent: { left: 160 },
+  border: { left: { style: BorderStyle.DOTTED, size: 12, color: BLUE, space: 8 } },
+  children: [new TextRun({ text: "INDEX TERMS ", font: SANS, size: 17, bold: true, color: BLUE }),
+    new TextRun({ text: "Apache Spark, big data, bearing fault diagnosis, improved random forest, reproducibility, wavelet packet transform.", font: SANS, size: 17 })] })));
 
 // ---------------- 1 introduction
 c.push(H1("1. Introduction"));
@@ -129,7 +169,7 @@ c.push(P(
   "The selected paper is Wan et al., “An Efficient Rolling Bearing Fault Diagnosis Method Based on Spark and Improved Random Forest Algorithm”, published in ", "*IEEE Access*", " (Q2) in 2021", fnWanFull(37866), ". It addresses two weaknesses of the classic random forest (RF) of Breiman", fn(['Breiman, Leo, "Random Forests", ', { t: "Machine Learning", i: true }, " vol. 45, no. 1 (2001), p. 5. Available at: ", { link: "https://doi.org/10.1023/A:1010933404324" }, "."]),
   " when it is used on large vibration datasets: training and diagnosis are slow, and many trees are weak or cast near-identical votes. The authors propose an improved random forest that keeps only accurate and mutually dissimilar trees, and they distribute every stage of the method on Apache Spark."));
 c.push(P(
-  "The objective of this assignment is to reproduce the methodology and selected experiments of the paper, compare the results with the original ones, and explain the differences. Because I worked alone, the scope agreed in the proposal is reduced to three experiments on the smallest of the paper's three datasets: E1 compares the accuracy of a serial scikit-learn RF, Spark MLlib RF and the Spark IRF with 20, 100 and 200 trees; E2 measures training and diagnosis time as the number of Spark executor cores grows from 1 to 4, as a single-machine stand-in for the paper's one to four worker nodes; and E3 measures accuracy and training time on 1.4, 2.8 and 5.6 GB subsets. All numbers in Sections 4 and 5 were produced by the scripts in the project repository, executed by the repository's GitHub Actions workflow; the values attributed to the paper are labelled as such."));
+  "The objective of this assignment is to reproduce the methodology and selected experiments of the paper, compare the results with the original ones, and explain the differences. Because I worked alone, the scope agreed in the proposal is reduced to three experiments on the smallest of the paper's three datasets: E1 compares the accuracy of a serial scikit-learn RF, Spark MLlib RF and the Spark IRF with 20, 100 and 200 trees; E2 measures training and diagnosis time as the number of Spark executor cores grows from 1 to 4, as a single-machine stand-in for the paper's one to four worker nodes; and E3 measures accuracy and training time on 1.4, 2.8 and 5.6 GB subsets. All numbers in Sections IV and V were produced by the scripts in the project repository, executed by the repository's GitHub Actions workflow; the values attributed to the paper are labelled as such."));
 
 // ---------------- 2 original study
 c.push(H1("2. The Original Study"));
@@ -163,10 +203,10 @@ c.push(T(["Claim", "Reported value", "Page"], [
   ["Spark-IRFA diagnosis-time reduction vs Spark-RFA (datasets 1–3)", "74.29% / 76.00% / 78.01%", "37878"],
   ["Diagnosis time on 20.4 GB: Python-RFA vs Spark-IRFA", "24.3 min vs 3.1 min", "37878"],
   ["Training overhead of Spark-IRFA over Spark-RFA (4 workers, dataset 1)", "+85.98%", "37876"],
-], [4.2, 2.6, 0.8]));
+], [3.4, 2.4, 1.0], true));
 c.push(P(
   "The conclusion states that Spark-IRFA diagnoses 6.84 times faster than Python-RFA and 3.55 times faster than Spark-RFA", fnWan(37880),
-  ". These ratios do not follow from the reported times: 24.3 / 3.1 gives about 7.84, and a 78.01% reduction corresponds to about 4.5 times. This internal inconsistency is one of the reproducibility issues discussed in Section 5."));
+  ". These ratios do not follow from the reported times: 24.3 / 3.1 gives about 7.84, and a 78.01% reduction corresponds to about 4.5 times. This internal inconsistency is one of the reproducibility issues discussed in Section V."));
 
 // ---------------- 3 methodology
 c.push(H1("3. Reproduction Methodology"));
@@ -212,7 +252,7 @@ c.push(T(["Parameter", "Value used", "Source"], [
   ["α (node similarity tolerance)", "0.2", "paper"],
   ["similarityFilter threshold", "{{IRF_THRESHOLD}}", "paper range 0.5–0.9; low end, as the paper recommends for vibration data"],
   ["Random seeds", "42 (number of seeds: {{NSEEDS}})", "this study"],
-], [2.3, 2.6, 2.7]));
+], [2.3, 2.6, 2.7], true));
 c.push(H2("3.6 Experiments and evaluation measures"));
 c.push(BUL("**E1 – accuracy.** Python-RFA, Spark-RFA and Spark-IRFA with 20, 100 and 200 trees on the full dataset, using all cores. Measures: test accuracy, weighted F1, training and diagnosis time, and the number of trees kept by the IRF. A sweep of similarityFilter from 0.3 to 0.9 reuses the similarity matrix of each run."));
 c.push(BUL("**E2 – scalability.** Spark-RFA and Spark-IRFA with 100 trees and 1, 2, 3 and 4 executor cores, matching the paper's 1–4 worker nodes. Measures: training time, its reduction relative to one core, speed-up and diagnosis time."));
@@ -247,7 +287,7 @@ c.push(T(["Trees", "Python-RFA (ours)", "Spark-RFA (ours)", "Spark-IRFA (ours)",
   ["100", "{{E1_PY_100_ACC}}", "{{E1_RF_100_ACC}}", "{{E1_IRF_100_ACC}}", "{{E1_IRF_100_NTREES}} of 100", "not reported"],
   ["200", "{{E1_PY_200_ACC}}", "{{E1_RF_200_ACC}}", "{{E1_IRF_200_ACC}}", "{{E1_IRF_200_NTREES}} of 200", "96.43 / 96.51 / 97.22"],
 ], [0.8, 1.3, 1.3, 1.3, 1.3, 2.0]));
-c.push(FIG("e1_accuracy.png", 4.9));
+c.push(FIG("e1_accuracy.png"));
 c.push(CAP("Figure 1. E1 accuracy of our three implementations (solid) and the values reported by the paper (dashed; the paper gives exact values only for 20 and 200 trees)."));
 c.push(P(
   "With 200 trees, Spark-IRFA reached {{E1_IRF_200_ACC}}%, which is {{E1_VERDICT_200}} Spark-RFA ({{E1_D_IRF_RF_200}} percentage points); at 100 and 20 trees the differences were {{E1_D_IRF_RF_100}} and {{E1_D_IRF_RF_20}} pp. Spark-IRFA was more accurate than Spark-RFA in {{E1_IRF_WINS}} of the three forest sizes. Spark-RFA was {{E1_VERDICT_PY_200}} the serial scikit-learn forest at 200 trees ({{E1_D_RF_PY_200}} pp). Small differences between the two are expected, because both implement the same algorithm but with different random streams and a different split search (MLlib bins every continuous feature into 32 candidate thresholds, scikit-learn tests every value). Compared with the paper, our accuracies at 200 trees differ by {{E1_GAP_PY_200}}, {{E1_GAP_RF_200}} and {{E1_GAP_IRF_200}} pp for Python-RFA, Spark-RFA and Spark-IRFA. Growing the forest from 20 to 200 trees changed Spark-RFA accuracy by {{E1_RF_GAIN_TREES}} pp and Spark-IRFA accuracy by {{E1_IRF_GAIN_TREES}} pp."));
@@ -276,7 +316,7 @@ c.push(T(["Threshold", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9"], [
   ["Trees kept", "{{SW_N_3}}", "{{SW_N_4}}", "{{SW_N_5}}", "{{SW_N_6}}", "{{SW_N_7}}", "{{SW_N_8}}", "{{SW_N_9}}"],
   ["Accuracy (%)", "{{SW_A_3}}", "{{SW_A_4}}", "{{SW_A_5}}", "{{SW_A_6}}", "{{SW_A_7}}", "{{SW_A_8}}", "{{SW_A_9}}"],
 ], [1.4, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8]));
-c.push(FIG("e1_threshold_sweep.png", 4.2));
+c.push(FIG("e1_threshold_sweep.png"));
 c.push(CAP("Figure 2. Number of trees kept by the IRF as a function of similarityFilter."));
 c.push(H2("4.4 E2 – Scalability with executor cores"));
 c.push(TCAP("Table 9. E2 times (s) with 100 trees; reduction and speed-up of Spark-IRFA relative to one core."));
@@ -286,11 +326,11 @@ c.push(T(["Cores", "Train Spark-RF", "Train Spark-IRF", "IRF optimisation", "Red
   ["3", "{{E2_RF_TRAIN_3}}", "{{E2_IRF_TRAIN_3}}", "{{E2_IRF_OPT_3}}", "{{E2_RED_3}}", "{{E2_SPEEDUP_3}}", "{{E2_RF_DIAG_3}}", "{{E2_IRF_DIAG_3}}"],
   ["4", "{{E2_RF_TRAIN_4}}", "{{E2_IRF_TRAIN_4}}", "{{E2_IRF_OPT_4}}", "{{E2_RED_4}}", "{{E2_SPEEDUP_4}}", "{{E2_RF_DIAG_4}}", "{{E2_IRF_DIAG_4}}"],
 ], [0.7, 1.0, 1.0, 1.0, 1.0, 0.9, 1.0, 1.0]));
-c.push(FIG("e2_reduction_vs_paper.png", 4.6));
+c.push(FIG("e2_reduction_vs_paper.png"));
 c.push(CAP("Figure 3. Training-time reduction of Spark-IRFA relative to one core (ours) and to one worker node (paper)."));
 c.push(P(
   "Spark-IRFA training time {{E2_TREND}} as cores were added. The reduction relative to one core was {{E2_RED_2}}%, {{E2_RED_3}}% and {{E2_RED_4}}% with 2, 3 and 4 cores, whereas the paper reports 51.48%, 66.08% and 73.26% with 2, 3 and 4 worker nodes. Parallel efficiency at 4 cores was {{E2_EFF_4}}%. Spark-RFA alone was reduced by {{E2_RFRED_4}}% at 4 cores. At {{E2_MAXC}} cores the IRF needed {{E2_OVERHEAD_MAX}}% more training time than the plain Spark-RFA, against 85.98% in the paper on Dataset 1 with four workers. The comparison is qualitative: one virtual CPU is not one eight-core node, and all cores share one memory bus and one disk."));
-c.push(FIG("e2_training_time.png", 4.2));
+c.push(FIG("e2_training_time.png"));
 c.push(CAP("Figure 4. E2 training time of Spark-RFA and Spark-IRFA against the number of executor cores."));
 c.push(H2("4.5 E3 – Effect of data size"));
 c.push(TCAP("Table 10. E3 results with 100 trees on nested subsets of the enlarged dataset."));
@@ -299,7 +339,7 @@ c.push(T(["Subset", "Raw size (GB)", "Training rows", "Spark-RF acc. (%)", "Spar
   ["50%", "{{E3_GB_50}}", "{{E3_N_50}}", "{{E3_RF_ACC_50}}", "{{E3_IRF_ACC_50}}", "{{E3_IRF_NTREES_50}}", "{{E3_RF_TRAIN_50}}", "{{E3_IRF_TRAIN_50}}"],
   ["100%", "{{E3_GB_100}}", "{{E3_N_100}}", "{{E3_RF_ACC_100}}", "{{E3_IRF_ACC_100}}", "{{E3_IRF_NTREES_100}}", "{{E3_RF_TRAIN_100}}", "{{E3_IRF_TRAIN_100}}"],
 ], [0.7, 0.9, 1.0, 1.0, 1.0, 0.8, 1.0, 1.0]));
-c.push(FIG("e3_datasize.png", 5.8));
+c.push(FIG("e3_datasize.png"));
 c.push(CAP("Figure 5. E3 accuracy and training time against dataset size."));
 c.push(P(
   "As the data grew from {{E3_GB_25}} to {{E3_GB_100}} GB, Spark-IRFA accuracy {{E3_TREND}} ({{E3_DIFF}} pp). The paper reports a rise from 97.09% to 98.12% between 5.6 and 20.4 GB; at 5.6 GB our value differs from the paper's by {{E3_GAP_56}} pp. Spark-IRFA training time went from {{E3_IRF_TRAIN_25}} s to {{E3_IRF_TRAIN_100}} s and Spark-RFA from {{E3_RF_TRAIN_25}} s to {{E3_RF_TRAIN_100}} s; for a fixed depth, the cost of tree induction is expected to grow roughly linearly with the number of training rows."));
@@ -318,7 +358,7 @@ c.push(T(["Claim of the paper", "Paper", "This reproduction", "Verdict"], [
 c.push(H1("5. Discussion"));
 c.push(H2("5.1 Similarities"));
 c.push(P(
-  "The overall shape of the method could be rebuilt from the text, and the qualitative mechanisms behave as described. The low-accuracy filter and the similarity-based selection shrink the forest, and a smaller forest diagnoses proportionally faster, because prediction cost is linear in the number of trees. Spark spreads both training and the sub-forest optimisation over the available cores, and the optimisation is an extra cost paid once at training time, as the paper also reports. With 200 trees the three implementations reached {{E1_PY_200_ACC}}%, {{E1_RF_200_ACC}}% and {{E1_IRF_200_ACC}}%, against 96.43–97.22% in the paper; Section 5.2 discusses this gap."));
+  "The overall shape of the method could be rebuilt from the text, and the qualitative mechanisms behave as described. The low-accuracy filter and the similarity-based selection shrink the forest, and a smaller forest diagnoses proportionally faster, because prediction cost is linear in the number of trees. Spark spreads both training and the sub-forest optimisation over the available cores, and the optimisation is an extra cost paid once at training time, as the paper also reports. With 200 trees the three implementations reached {{E1_PY_200_ACC}}%, {{E1_RF_200_ACC}}% and {{E1_IRF_200_ACC}}%, against 96.43–97.22% in the paper; Section V-B discusses this gap."));
 c.push(H2("5.2 Differences and their likely causes"));
 c.push(P(
   "**Under-specified preprocessing.** The paper does not give the window length, the overlap step, the wavelet basis, the decomposition level or its exact class list, and its Table 3 describes the forest parameters only qualitatively. Each of these choices changes the feature space and therefore the absolute accuracy. Our Spark-RFA at 200 trees differed from the paper's by {{E1_GAP_RF_200}} pp. The most likely explanation is a different and easier classification task: our ten classes use only the 12 kHz drive-end signals of four loads, while the paper's Table 1 may include other sensors, sampling rates or fault positions that are harder to separate. Different window lengths and wavelet settings can also change accuracy by several points."));
@@ -352,27 +392,37 @@ c.push(P(
 c.push(P(
   "The main lessons are that a reproduction is only as good as the information published with the original work, that free parameters such as similarityFilter directly decide how many trees the IRF keeps and therefore its speed and accuracy, and that a suspicion such as data leakage should be tested rather than assumed: the time-blocked split showed that our high accuracy was not caused by overlapping windows. A natural next step would be to repeat the experiments on a real multi-node cluster and on a harder task, for example training on some motor loads and testing on others, so that the differences between the forests become measurable."));
 
-// ---------------- references
+// ---------------- references (IEEE style)
 c.push(H1("References"));
+const DOI = (d) => ({ link: "https://doi.org/" + d, text: d });
 const REFS = [
-  ['Breiman, Leo, "Random Forests", ', { t: "Machine Learning", i: true }, " vol. 45, no. 1 (2001), pp. 5–32. Available at: ", { link: "https://doi.org/10.1023/A:1010933404324" }],
-  ['Kapoor, Sayash; and Arvind Narayanan, "Leakage and the Reproducibility Crisis in Machine-Learning-Based Science", ', { t: "Patterns", i: true }, " vol. 4, no. 9 (2023), article 100804. Available at: ", { link: "https://doi.org/10.1016/j.patter.2023.100804" }],
-  ['Lee, Gregory R.; Ralf Gommers; Filip Waselewski; Kai Wohlfahrt; and Aaron O’Leary, "PyWavelets: A Python Package for Wavelet Analysis", ', { t: "Journal of Open Source Software", i: true }, " vol. 4, no. 36 (2019), p. 1237. Available at: ", { link: "https://doi.org/10.21105/joss.01237" }],
-  ['Meng, Xiangrui et al., "MLlib: Machine Learning in Apache Spark", ', { t: "Journal of Machine Learning Research", i: true }, " vol. 17, no. 34 (2016), pp. 1–7. Available at: ", { link: "https://jmlr.org/papers/v17/15-237.html" }],
-  ['Pedregosa, Fabian et al., "Scikit-learn: Machine Learning in Python", ', { t: "Journal of Machine Learning Research", i: true }, " vol. 12 (2011), pp. 2825–2830. Available at: ", { link: "https://jmlr.org/papers/v12/pedregosa11a.html" }],
-  ['Smith, Wade A.; and Robert B. Randall, "Rolling Element Bearing Diagnostics Using the Case Western Reserve University Data: A Benchmark Study", ', { t: "Mechanical Systems and Signal Processing", i: true }, " vol. 64–65 (2015), pp. 100–131. Available at: ", { link: "https://doi.org/10.1016/j.ymssp.2015.04.021" }],
-  [W1, { t: "IEEE Access", i: true }, " vol. 9 (2021), pp. 37866–37882. Available at: ", { link: DOI_W }],
-  ['Zaharia, Matei et al., "Apache Spark: A Unified Engine for Big Data Processing", ', { t: "Communications of the ACM", i: true }, " vol. 59, no. 11 (2016), pp. 56–65. Available at: ", { link: "https://doi.org/10.1145/2934664" }],
+  ['L. Wan, K. Gong, G. Zhang, X. Yuan, C. Li, and X. Deng, “An efficient rolling bearing fault diagnosis method based on Spark and improved random forest algorithm,” ', { t: "IEEE Access", i: true }, ", vol. 9, pp. 37866–37882, 2021, doi: ", DOI("10.1109/ACCESS.2021.3063929"), "."],
+  ['L. Breiman, “Random forests,” ', { t: "Mach. Learn.", i: true }, ", vol. 45, no. 1, pp. 5–32, 2001, doi: ", DOI("10.1023/A:1010933404324"), "."],
+  ['W. A. Smith and R. B. Randall, “Rolling element bearing diagnostics using the Case Western Reserve University data: A benchmark study,” ', { t: "Mech. Syst. Signal Process.", i: true }, ", vols. 64–65, pp. 100–131, 2015, doi: ", DOI("10.1016/j.ymssp.2015.04.021"), "."],
+  ['G. R. Lee, R. Gommers, F. Waselewski, K. Wohlfahrt, and A. O’Leary, “PyWavelets: A Python package for wavelet analysis,” ', { t: "J. Open Source Softw.", i: true }, ", vol. 4, no. 36, p. 1237, 2019, doi: ", DOI("10.21105/joss.01237"), "."],
+  ['M. Zaharia et al., “Apache Spark: A unified engine for big data processing,” ', { t: "Commun. ACM", i: true }, ", vol. 59, no. 11, pp. 56–65, 2016, doi: ", DOI("10.1145/2934664"), "."],
+  ['X. Meng et al., “MLlib: Machine learning in Apache Spark,” ', { t: "J. Mach. Learn. Res.", i: true }, ", vol. 17, no. 34, pp. 1–7, 2016. [Online]. Available: ", { link: "https://jmlr.org/papers/v17/15-237.html" }],
+  ['F. Pedregosa et al., “Scikit-learn: Machine learning in Python,” ', { t: "J. Mach. Learn. Res.", i: true }, ", vol. 12, pp. 2825–2830, 2011. [Online]. Available: ", { link: "https://jmlr.org/papers/v12/pedregosa11a.html" }],
+  ['S. Kapoor and A. Narayanan, “Leakage and the reproducibility crisis in machine-learning-based science,” ', { t: "Patterns", i: true }, ", vol. 4, no. 9, Art. no. 100804, 2023, doi: ", DOI("10.1016/j.patter.2023.100804"), "."],
 ];
-for (const r of REFS) c.push(new Paragraph({ indent: { left: 400, hanging: 400 }, spacing: { after: 100 }, children: r.map(runFromPart(20)) }));
+REFS.forEach((r, k) => {
+  const kids = [new TextRun({ text: `[${k + 1}]\t`, font: SERIF, size: 15 })];
+  for (const x of r) {
+    if (typeof x === "string") kids.push(new TextRun({ text: x, font: SERIF, size: 15 }));
+    else if (x.link) kids.push(new ExternalHyperlink({ link: x.link, children: [new TextRun({ text: x.text || x.link, style: "Hyperlink", font: SERIF, size: 15 })] }));
+    else kids.push(new TextRun({ text: x.t, italics: !!x.i, font: SERIF, size: 15 }));
+  }
+  c.push(new Paragraph({ indent: { left: 400, hanging: 400 }, tabStops: [{ type: TabStopType.LEFT, position: 400 }],
+    alignment: AlignmentType.JUSTIFIED, spacing: { after: 40 }, children: kids }));
+});
 
 // ---------------- supporting material, division of work, reflection
 c.push(H1("Appendix A. Supporting Materials"));
-c.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: "Repository (code, setup instructions, configuration, experiment scripts, raw results and figures): ", font: FONT, size: 22 }),
-  new ExternalHyperlink({ link: "{{GITHUB_URL}}", children: [new TextRun({ text: "{{GITHUB_URL}}", style: "Hyperlink", font: FONT, size: 22 })] })] }));
-c.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: "Dataset: CWRU Bearing Data Center, ", font: FONT, size: 22 }),
-  new ExternalHyperlink({ link: "https://engineering.case.edu/bearingdatacenter", children: [new TextRun({ text: "https://engineering.case.edu/bearingdatacenter", style: "Hyperlink", font: FONT, size: 22 })] }),
-  new TextRun({ text: " (file numbers listed in src/irf_repro/cwru.py).", font: FONT, size: 22 })] }));
+c.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: "Repository (code, setup instructions, configuration, experiment scripts, raw results and figures): ", font: FONT, size: 19 }),
+  new ExternalHyperlink({ link: "{{GITHUB_URL}}", children: [new TextRun({ text: "{{GITHUB_URL}}", style: "Hyperlink", font: FONT, size: 19 })] })] }));
+c.push(new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: "Dataset: CWRU Bearing Data Center, ", font: FONT, size: 19 }),
+  new ExternalHyperlink({ link: "https://engineering.case.edu/bearingdatacenter", children: [new TextRun({ text: "https://engineering.case.edu/bearingdatacenter", style: "Hyperlink", font: FONT, size: 19 })] }),
+  new TextRun({ text: " (file numbers listed in src/irf_repro/cwru.py).", font: FONT, size: 19 })] }));
 c.push(P("External software used and acknowledged: Apache Spark / PySpark (Apache License 2.0), NumPy, pandas, PyArrow, SciPy, PyWavelets, scikit-learn, Matplotlib, python-docx and python-pptx. No code from the original authors was used, as none is published."));
 c.push(H1("Appendix B. Division of Work"));
 c.push(T(["Student (name / ID)", "Assigned responsibility", "Tasks completed", "Individual outputs"], [
@@ -401,34 +451,56 @@ c.push(T(["File", "Purpose"], [
 ], [2.4, 5.2]));
 c.push(P("To reproduce: install Python 3.11, Java 17 and requirements.txt, then run bash scripts/run_all.sh, or start the experiments workflow from the Actions tab of the repository."));
 c.push(H1("Declaration on the Use of Artificial Intelligence"));
-c.push(P("In line with the module's policy, I declare that a generative AI assistant (Claude, Anthropic) was used during this assignment. It assisted in drafting and debugging the Python/PySpark code and the GitHub Actions workflow, in structuring this report and the presentation, and in editing the English text. The selection of the paper, the scope, the decisions on assumptions and the interpretation were reviewed and approved by me. All experimental results reported in Sections 4 and 5 were produced by actually executing the code in the repository; no number was generated or estimated by the AI tool. I have checked the content and take full responsibility for this submission."));
+c.push(P("In line with the module's policy, I declare that a generative AI assistant (Claude, Anthropic) was used during this assignment. It assisted in drafting and debugging the Python/PySpark code and the GitHub Actions workflow, in structuring this report and the presentation, and in editing the English text. The selection of the paper, the scope, the decisions on assumptions and the interpretation were reviewed and approved by me. All experimental results reported in Sections IV and V were produced by actually executing the code in the repository; no number was generated or estimated by the AI tool. I have checked the content and take full responsibility for this submission."));
 
-// ================================================================== document
+// ================================================================== sections (1 column for wide blocks, 2 for text)
+function isWide(i) {
+  const el = c[i];
+  if (WIDE.has(el)) return true;
+  if (TCAPS.has(el) && i + 1 < c.length && WIDE.has(c[i + 1])) return true;
+  if (CAPS.has(el) && i > 0 && WIDE.has(c[i - 1]) && FIGS.has(c[i - 1])) return true;
+  return false;
+}
+const groups = [];
+c.forEach((el, i) => {
+  const w = isWide(i);
+  if (!groups.length || groups[groups.length - 1].wide !== w) groups.push({ wide: w, children: [] });
+  groups[groups.length - 1].children.push(el);
+});
+const header = new Header({ children: [new Paragraph({
+  tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
+  border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "BFBFBF", space: 2 } },
+  children: [new TextRun({ text: "Reproduction of Wan et al. (2021): Spark-based bearing fault diagnosis with an improved random forest", font: SANS, size: 14, color: GREY }),
+    new TextRun({ text: "\tAI508 – Assignment 2", font: SANS, size: 15, bold: true, color: BLUE })] })] });
+const footer = new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER,
+  children: [new TextRun({ children: [PageNumber.CURRENT], font: SANS, size: 15 })] })] });
+const page = { size: { width: PAGE_W, height: PAGE_H }, margin: { top: MARGIN_TB, bottom: MARGIN_TB, left: MARGIN_LR, right: MARGIN_LR, header: 500, footer: 500 } };
+const sections = groups.map((g, k) => ({
+  properties: { ...(k ? { type: SectionType.CONTINUOUS } : {}), page,
+    column: g.wide ? { count: 1 } : { count: 2, space: COL_GAP, equalWidth: true } },
+  ...(k === 0 ? { headers: { default: header }, footers: { default: footer } } : {}),
+  children: g.children,
+}));
+
 const doc = new Document({
   creator: "{{AUTHOR}}",
   title: "AI508 Assignment 2 Report",
   styles: {
-    default: { document: { run: { font: FONT, size: 22 } } },
+    default: { document: { run: { font: SERIF, size: 19 } } },
     paragraphStyles: [
       { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
-        run: { font: FONT, size: 30, bold: true, color: "1F3864" }, paragraph: { spacing: { before: 300, after: 120 }, keepNext: true, outlineLevel: 0 } },
+        run: { font: SANS, size: 18, bold: true, color: BLUE }, paragraph: { keepNext: true, outlineLevel: 0 } },
       { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
-        run: { font: FONT, size: 24, bold: true, color: "2F5496" }, paragraph: { spacing: { before: 200, after: 80 }, keepNext: true, outlineLevel: 1 } },
+        run: { font: SANS, size: 16, bold: true, color: BLUE }, paragraph: { keepNext: true, outlineLevel: 1 } },
     ],
   },
   numbering: { config: [{ reference: "bullets", levels: [{ level: 0, format: LevelFormat.BULLET, text: "•", alignment: AlignmentType.LEFT,
-    style: { paragraph: { indent: { left: 540, hanging: 270 } } } }] }] },
-  footnotes: FN,
-  sections: [{
-    properties: { page: { size: { width: PAGE_W, height: 16838 }, margin: { top: 1200, bottom: 1200, left: MARGIN, right: MARGIN } } },
-    footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER,
-      children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: 18 })] })] }) },
-    children: c,
-  }],
+    style: { paragraph: { indent: { left: 300, hanging: 200 } } } }] }] },
+  sections,
 });
 
 Packer.toBuffer(doc).then((buf) => {
   const out = path.join(HERE, "..", "report_template.docx");
   fs.writeFileSync(out, buf);
-  console.log("wrote", out);
+  console.log("wrote", out, "sections:", sections.length);
 });
