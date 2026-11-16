@@ -28,16 +28,17 @@ from pptx.util import Emu, Inches, Pt  # noqa: E402
 
 THEME = os.path.join(REPO_ROOT, "report", "template_src", "slide_theme.pptx")
 OUT = os.path.join(REPO_ROOT, "report", "AI508_A2_Presentation.pptx")
-FONT = "Red Hat Display"
-WHITE, TEAL, AMBER, SKY, MUTED = "FFFFFF", "14B8A6", "F59E0B", "60A5FA", "CBD5E1"
+TITLE_FONT, BODY_FONT, BOLD_FONT = "Antonio Bold", "DM Sans", "DM Sans Bold"
+YELLOW, NAVY, PANEL, WHITE, LIGHT = "FFAE10", "012047", "01445C", "FFFFFF", "7DD3FC"
 MIN_PT = 32
 
-# ------------------------------------------------------------------ dark charts
+# chart colours (names kept from the chart code): IRF = yellow, Spark RF = light blue, Python = white
+TEAL, AMBER, SKY, MUTED = YELLOW, LIGHT, WHITE, "CBD5E1"
 CH = {"Python-RFA": SKY, "Spark-RFA": AMBER, "Spark-IRFA": TEAL}
 plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 30, "text.color": "white", "axes.labelcolor": "white",
-    "xtick.color": "white", "ytick.color": "white", "axes.edgecolor": "#64748B", "axes.facecolor": "none",
-    "figure.facecolor": "none", "axes.grid": True, "grid.color": "#334155", "grid.linewidth": 1.2,
+    "xtick.color": "white", "ytick.color": "white", "axes.edgecolor": "#5B7BA6", "axes.facecolor": "none",
+    "figure.facecolor": "none", "axes.grid": True, "grid.color": "#2C4F7C", "grid.linewidth": 1.2,
     "axes.spines.top": False, "axes.spines.right": False, "legend.frameon": False, "lines.linewidth": 4,
     "lines.markersize": 16, "xtick.labelsize": 30, "ytick.labelsize": 30, "axes.labelsize": 32,
     "legend.fontsize": 30,
@@ -173,9 +174,23 @@ def move_slide(prs, slide, index):
     lst.insert(index, el)
 
 
+def delete_slide(prs, slide):
+    lst = prs.slides._sldIdLst
+    for e in list(lst):
+        if prs.slides.part.related_part(e.get(qn("r:id"))) is slide.part:
+            prs.part.drop_rel(e.get(qn("r:id")))
+            lst.remove(e)
+
+
 def remove(slide, *names):
     for shp in list(slide.shapes):
-        if shp.name in names or (names == ("ALLTEXT",) and shp.shape_type == 17):
+        if shp.name in names:
+            shp._element.getparent().remove(shp._element)
+
+
+def keep_only(slide, *names):
+    for shp in list(slide.shapes):
+        if shp.name not in names:
             shp._element.getparent().remove(shp._element)
 
 
@@ -185,101 +200,104 @@ def remove_text(slide):
             shp._element.getparent().remove(shp._element)
 
 
-def text(slide, x, y, w, h, paras, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.TOP, bullets=False, spacing=6, size=MIN_PT):
-    """paras: list of (text, size_pt, bold, color) tuples or plain strings (32 pt white)."""
-    tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    tf = tb.text_frame
-    tf.word_wrap = True
-    tf.vertical_anchor = anchor
-    for m in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
-        setattr(tf, m, Emu(0))
+def group(slide, name):
+    return [s for s in slide.shapes if s.name == name][0]
+
+
+def _runs(p, t, size, color, bold, font=None):
+    """**text** is highlighted (bold, yellow on dark / navy on yellow handled by caller colour)."""
+    for part in re.split(r"(\*\*[^*]+\*\*)", t):
+        if not part:
+            continue
+        hi = part.startswith("**")
+        r = p.add_run()
+        r.text = part[2:-2] if hi else part
+        r.font.name = font or (BOLD_FONT if (bold or hi) else BODY_FONT)
+        r.font.size = Pt(size)
+        r.font.color.rgb = RGBColor.from_string((YELLOW if color == WHITE else color) if hi else color)
+
+
+def _fill_tf(tf, paras, size, color, bold, align, bullets, spacing, font=None):
     first = True
     for item in paras:
-        if isinstance(item, str):
-            item = (item, size, False, WHITE)
-        t, size, bold, color = item
-        assert size >= MIN_PT, f"font {size} < {MIN_PT}: {t}"
+        t, sz, c, b = (item, size, color, bold) if isinstance(item, str) else (list(item) + [size, color, bold][len(item) - 1:])[:4]
+        assert sz >= MIN_PT, f"font {sz} < {MIN_PT}: {t}"
         p = tf.paragraphs[0] if first else tf.add_paragraph()
         first = False
         p.alignment = align
         p.space_after = Pt(spacing)
         if bullets:
             pPr = p._p.get_or_add_pPr()
-            pPr.set("marL", str(Inches(0.5)))
-            pPr.set("indent", str(-Inches(0.5)))
-            for tag in ("a:buFont", "a:buChar"):
-                pass
-            bf = pPr.makeelement(qn("a:buFont"), {"typeface": "Arial"})
-            bc = pPr.makeelement(qn("a:buChar"), {"char": "•"})
+            pPr.set("marL", str(Inches(0.45)))
+            pPr.set("indent", str(-Inches(0.45)))
             clr = pPr.makeelement(qn("a:buClr"), {})
-            clr.append(clr.makeelement(qn("a:srgbClr"), {"val": TEAL}))
+            clr.append(clr.makeelement(qn("a:srgbClr"), {"val": YELLOW if color == WHITE else NAVY}))
             pPr.append(clr)
-            pPr.append(bf)
-            pPr.append(bc)
-        for k, part in enumerate(re.split(r"(\*\*[^*]+\*\*)", t)):
-            if not part:
-                continue
-            r = p.add_run()
-            r.text = part.strip("*") if part.startswith("**") else part
-            r.font.name = FONT
-            r.font.size = Pt(size)
-            r.font.bold = bold or part.startswith("**")
-            r.font.color.rgb = RGBColor.from_string(AMBER if part.startswith("**") and not bold else color)
+            pPr.append(pPr.makeelement(qn("a:buFont"), {"typeface": "Arial"}))
+            pPr.append(pPr.makeelement(qn("a:buChar"), {"char": "■"}))
+        _runs(p, t, sz, c, b, font)
+
+
+def text(slide, x, y, w, h, paras, size=MIN_PT, color=WHITE, bold=False, align=PP_ALIGN.LEFT,
+         anchor=MSO_ANCHOR.TOP, bullets=False, spacing=8, font=None):
+    tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = anchor
+    for m in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
+        setattr(tf, m, Emu(0))
+    _fill_tf(tf, paras, size, color, bold, align, bullets, spacing, font)
     return tb
 
 
-def pill(slide, x, y, w, h, t, size=32, outline=AMBER, fill=None, color=WHITE):
+def title(slide, t, x, y, w, h, size=80, color=YELLOW, align=PP_ALIGN.LEFT):
+    return text(slide, x, y, w, h, [(t, size, color)], font=TITLE_FONT, align=align, anchor=MSO_ANCHOR.MIDDLE, spacing=0)
+
+
+def box(slide, x, y, w, h, paras, style="panel", size=MIN_PT, align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.MIDDLE,
+        bullets=False, spacing=8, pad=0.3, radius=0.12, bold=False):
+    """Coloured text box. style: panel (navy-teal + yellow border), yellow (filled), outline (navy + yellow border)."""
     s = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
-    s.adjustments[0] = 0.3
-    if fill:
-        s.fill.solid()
-        s.fill.fore_color.rgb = RGBColor.from_string(fill)
-    else:
-        s.fill.background()
-    s.line.color.rgb = RGBColor.from_string(outline)
+    s.adjustments[0] = radius
+    fill, line, color = {"panel": (PANEL, YELLOW, WHITE), "yellow": (YELLOW, YELLOW, NAVY),
+                         "outline": (NAVY, YELLOW, WHITE), "white": (WHITE, WHITE, NAVY)}[style]
+    s.fill.solid()
+    s.fill.fore_color.rgb = RGBColor.from_string(fill)
+    s.line.color.rgb = RGBColor.from_string(line)
     s.line.width = Pt(2.5)
     s.shadow.inherit = False
     tf = s.text_frame
     tf.word_wrap = True
-    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    tf.vertical_anchor = anchor
     for m in ("margin_left", "margin_right"):
-        setattr(tf, m, Inches(0.25))
-    p = tf.paragraphs[0]
-    p.alignment = PP_ALIGN.LEFT
-    for part in re.split(r"(\*\*[^*]+\*\*)", t):
-        if not part:
-            continue
-        r = p.add_run()
-        r.text = part.strip("*")
-        r.font.name = FONT
-        r.font.size = Pt(size)
-        r.font.bold = part.startswith("**")
-        r.font.color.rgb = RGBColor.from_string(AMBER if part.startswith("**") else color)
+        setattr(tf, m, Inches(pad))
+    for m in ("margin_top", "margin_bottom"):
+        setattr(tf, m, Inches(min(pad, 0.15)))
+    _fill_tf(tf, paras, size, color, bold, align, bullets, spacing)
     return s
+
+
+def label(slide, x, y, w, h, t, size=MIN_PT, color=NAVY, align=PP_ALIGN.LEFT):
+    """Text placed on an existing template bar/pill."""
+    return text(slide, x, y, w, h, [t], size=size, color=color, bold=True, align=align, anchor=MSO_ANCHOR.MIDDLE, spacing=0)
 
 
 def notes(slide, t):
     slide.notes_slide.notes_text_frame.text = t
 
 
-def title(slide, t, x, y, w, h, size=80, align=PP_ALIGN.LEFT):
-    return text(slide, x, y, w, h, [(t, size, False, WHITE)], align=align, anchor=MSO_ANCHOR.MIDDLE, spacing=0)
-
-
 def chart_slide(slide, img, heading, points, note):
-    remove_text(slide)
-    remove(slide, "Group 6", "Freeform 8", "Freeform 9")
-    panel = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.3), Inches(1.4), Inches(10.6), Inches(7.7))
-    panel.adjustments[0] = 0.04
+    keep_only(slide, "Freeform 42", "Group 43", "Group 46")
+    title(slide, heading, 1.12, 0.75, 13.0, 1.35, size=72)
+    panel = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.12), Inches(2.45), Inches(10.2), Inches(7.75))
+    panel.adjustments[0] = 0.05
     panel.fill.solid()
-    panel.fill.fore_color.rgb = RGBColor.from_string("0B1220")
-    sf = panel.fill._xPr.find(qn("a:solidFill"))[0]
-    sf.append(sf.makeelement(qn("a:alpha"), {"val": "78000"}))
-    panel.line.fill.background()
+    panel.fill.fore_color.rgb = RGBColor.from_string("001735")
+    panel.line.color.rgb = RGBColor.from_string(YELLOW)
+    panel.line.width = Pt(1.5)
     panel.shadow.inherit = False
-    slide.shapes.add_picture(img, Inches(1.35), Inches(1.45), Inches(10.5), Inches(7.6))
-    title(slide, heading, 12.2, 1.45, 6.5, 1.3, size=54)
-    text(slide, 12.2, 3.0, 6.45, 6.9, points, bullets=True, spacing=14)
+    slide.shapes.add_picture(img, Inches(1.22), Inches(2.70), Inches(10.0), Inches(10.0 * 7.6 / 10.5))
+    box(slide, 11.75, 3.65, 7.0, 6.55, points, style="panel", bullets=True, spacing=14, anchor=MSO_ANCHOR.MIDDLE)
     notes(slide, note)
 
 
@@ -294,190 +312,194 @@ def main():
     chart_e1(res, F["e1"]); chart_diag(res, F["diag"]); chart_e2(res, F["e2"]); chart_e3(res, F["e3"]); chart_sweep(res, F["sweep"])
 
     prs = Presentation(THEME)
-    T = list(prs.slides)                      # 15 template slides
-    vis = T[11]
-    extra = [duplicate_slide(prs, vis) for _ in range(4)]
+    T = list(prs.slides)                                   # 14 template slides
+    copies = [duplicate_slide(prs, T[12]) for _ in range(6)]   # 5 chart slides + claims slide
 
-    # 1 title -------------------------------------------------------------
+    # 1 title -------------------------------------------------------------------
     s = T[0]
     remove_text(s)
-    text(s, 1.3, 1.0, 9, 0.7, [("AI508 Big Data Technologies", 32, False, MUTED)])
-    text(s, 10.7, 1.0, 8.0, 0.7, [(f"{V['AUTHOR']} – {V['STUDENT_ID']}", 32, False, MUTED)], align=PP_ALIGN.RIGHT)
-    text(s, 1.5, 2.3, 17.0, 4.8, [("Reproducing Spark-Based Bearing Fault Diagnosis", 72, True, WHITE)],
-         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 1.6, 7.62, 16.8, 1.2, [("Improved Random Forest • Wan et al. (2021) • IEEE Access", 36, False, WHITE)],
-         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 1.5, 9.35, 17.0, 0.8, [("Assignment 2 – Reproduction Study", 32, False, TEAL)], align=PP_ALIGN.CENTER)
+    text(s, 2.0, 1.33, 9.5, 0.65, ["AI508 BIG DATA TECHNOLOGIES"], bold=True, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, 1.12, 2.35, 10.3, 4.3, [("REPRODUCING", 96, YELLOW), ("SPARK-BASED BEARING", 80, WHITE),
+                                    ("FAULT DIAGNOSIS", 96, YELLOW)], font=TITLE_FONT, spacing=0, anchor=MSO_ANCHOR.MIDDLE)
+    text(s, 1.12, 6.95, 9.9, 1.6, ["Improved Random Forest \u2022 Wan et al. (2021)", "IEEE Access, vol. 9"], size=34, spacing=4)
+    label(s, 1.12, 9.45, 4.27, 0.9, f"{V['AUTHOR']} – {V['STUDENT_ID']}", align=PP_ALIGN.CENTER)
+    label(s, 4.90, 9.45, 4.56, 0.9, "Assignment 2", align=PP_ALIGN.CENTER)
     notes(s, "Introduce the paper and the aim: rebuild the method from scratch, run the experiments, and compare with the original results.")
 
-    # 2 agenda --------------------------------------------------------------
-    s = T[1]
-    remove_text(s)
-    title(s, "Agenda", 1.86, 1.7, 9.5, 1.8, size=96)
-    text(s, 1.86, 3.9, 9.8, 5.6, ["The original study", "Data and Big Data pipeline", "The improved random forest",
-                                   "Results: E1, E2, E3", "Comparison and lessons"], bullets=True, spacing=16, size=40)
-    notes(s, "Five parts: the paper, how the data were prepared with Spark, the algorithm, the three experiments, and what was and was not reproduced.")
-
-    # 3 original study --------------------------------------------------------
+    # 2 agenda (table of contents) ------------------------------------------------
     s = T[2]
     remove_text(s)
-    title(s, "The Original Study", 5.0, 2.3, 10.0, 1.6, size=72, align=PP_ALIGN.CENTER)
-    text(s, 5.2, 4.3, 9.6, 5.3, [("Wan et al., IEEE Access 9 (2021)", 36, True, AMBER),
-                                  "Q2 journal, pages 37866–37882",
-                                  "Spark + Improved Random Forest (IRF)",
-                                  "Bearing faults from CWRU vibration data",
-                                  "No code published"], align=PP_ALIGN.CENTER, spacing=12)
-    notes(s, "The paper diagnoses rolling-bearing faults with a random forest on Apache Spark. Its code is not public, so everything was rebuilt from the text.")
+    title(s, "AGENDA", 2.73, 1.95, 14.54, 1.6, size=96, align=PP_ALIGN.CENTER)
+    for (x, y), t in zip([(1.90, 5.01), (4.62, 6.97), (7.35, 5.01), (10.07, 6.97), (12.79, 5.01)],
+                         ["Original Study", "Data & Pipeline", "Improved Forest", "Results E1–E3", "Comparison"]):
+        label(s, x, y, 5.31, 1.18, t, align=PP_ALIGN.CENTER)
+    notes(s, "Five parts: the paper, how the data were prepared with Spark, the algorithm, the three experiments, and what was and was not reproduced.")
 
-    # 4 problem -----------------------------------------------------------------
+    # 3 original study --------------------------------------------------------------
     s = T[3]
     remove_text(s)
-    title(s, "The Problem", 7.93, 1.7, 10.5, 1.7, size=80)
-    text(s, 7.93, 3.7, 10.4, 6.0, ["Random forests on big vibration data are slow to train and apply",
-                                    "Many trees are weak or vote the same way",
-                                    "Idea: keep only accurate, different trees and run every step on Spark"],
-         bullets=True, spacing=20, size=40)
-    notes(s, "Two problems: speed on big data, and redundant trees. The paper's answer is the improved random forest plus Spark.")
+    title(s, "THE ORIGINAL STUDY", 1.12, 3.0, 10.5, 1.45, size=80)
+    box(s, 1.12, 4.65, 10.2, 3.55, [("Wan et al., IEEE Access 9 (2021)", 34, YELLOW, True),
+                                    ("Q2 journal • pp. 37866–37882", 34),
+                                    ("Spark + Improved Random Forest", 34),
+                                    ("CWRU bearing data • no code published", 34)], style="outline", spacing=6)
+    notes(s, "The paper diagnoses rolling-bearing faults with a random forest on Apache Spark. Its code is not public, so everything was rebuilt from the text.")
 
-    # 5 objectives -----------------------------------------------------------------
-    s = T[4]
-    remove_text(s)
-    remove(s, "Freeform 9", "Freeform 10", "Freeform 11")
-    title(s, "Objectives of the Reproduction", 1.6, 1.6, 16.8, 1.7, size=72, align=PP_ALIGN.CENTER)
-    text(s, 9.7, 3.9, 8.8, 0.8, [("Rebuilt from scratch, then measured:", 32, True, AMBER)])
-    for k, (lab, d) in enumerate([("E1", "Accuracy vs number of trees"), ("E2", "Speed with 1–4 cores"),
-                                   ("E3", "Effect of data size")]):
-        pill(s, 9.7, 4.9 + k * 1.55, 8.7, 1.25, f"**{lab}**  {d}")
-    notes(s, "Three experiments agreed in the proposal: accuracy with 20, 100 and 200 trees; scalability with 1 to 4 cores; and data size from 1.4 to 5.6 GB.")
-
-    # 6 data -------------------------------------------------------------------------
+    # 4 problem -----------------------------------------------------------------------
     s = T[5]
     remove_text(s)
-    title(s, "The Data", 1.12, 1.4, 8.5, 1.9, size=96)
-    text(s, 1.12, 3.6, 8.6, 6.4, ["CWRU bearing data, 12 kHz", "10 classes × 4 motor loads",
-                                   "Overlapping windows of 2,048 samples",
-                                   f"{V['N_WINDOWS']} windows = **{V['RAW_GB']} GB**"], bullets=True, spacing=16, size=36)
+    remove(s, "Freeform 10")
+    title(s, "THE PROBLEM", 1.12, 1.35, 14.0, 1.6, size=88)
+    box(s, 1.12, 3.45, 14.8, 2.25, ["Random forests on big vibration data are **slow** to train and to apply"],
+        style="yellow", size=38)
+    box(s, 1.12, 6.05, 14.8, 3.6, ["Many trees are **weak** or vote **the same way**",
+                                   "Idea: keep only accurate, different trees and run every step on Spark"],
+        style="outline", size=36, bullets=True, spacing=14)
+    notes(s, "Two problems: speed on big data, and redundant trees. The paper's answer is the improved random forest plus Spark.")
+
+    # 5 objectives (three cards) -----------------------------------------------------------
+    s = T[11]
+    remove_text(s)
+    title(s, "OBJECTIVES", 3.0, 1.1, 14.0, 1.6, size=88, align=PP_ALIGN.CENTER)
+    text(s, 3.0, 2.85, 14.0, 0.9, ["Rebuild the method from scratch, then measure:"], size=36, align=PP_ALIGN.CENTER)
+    for x, (h, b) in zip([2.28, 7.76, 13.24], [("E1 • ACCURACY", "Accuracy vs number of trees"),
+                                               ("E2 • SCALING", "Speed with 1–4 cores"),
+                                               ("E3 • DATA SIZE", "Effect of data size")]):
+        label(s, x, 6.85, 4.48, 1.2, h, size=34, color=WHITE, align=PP_ALIGN.CENTER)
+        text(s, x, 8.2, 4.48, 1.75, [b], color=NAVY, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE, spacing=0)
+    notes(s, "Three experiments agreed in the proposal: accuracy with 20, 100 and 200 trees; scalability with 1 to 4 cores; and data size from 1.4 to 5.6 GB.")
+
+    # 6 data ------------------------------------------------------------------------------------
+    s = T[4]
+    remove_text(s)
+    title(s, "THE DATA", 1.12, 1.6, 10.0, 1.5, size=88)
+    box(s, 1.12, 3.45, 9.95, 4.75, ["CWRU bearing data, 12 kHz", "10 classes × 4 motor loads",
+                                    "Windows of 2,048 samples", f"{V['N_WINDOWS']} windows = **{V['RAW_GB']} GB**"],
+        style="panel", size=36, bullets=True, spacing=14)
     notes(s, "Forty public files: normal and nine fault types under four loads. Overlapping sampling enlarges them to the size of the paper's first dataset.")
 
-    # 7 pipeline ----------------------------------------------------------------------
+    # 7 pipeline (three bars) -------------------------------------------------------------------
     s = T[6]
     remove_text(s)
-    title(s, "Big Data Pipeline", 9.49, 1.4, 10.0, 1.6, size=80)
-    text(s, 9.49, 3.3, 9.3, 6.8, ["Spark: cut signals into windows", "Spark: wavelet-packet features",
-                                   "Spark MLlib: train the forest", "Spark: improved-forest steps",
-                                   "Evaluate on the test set"], bullets=True, spacing=16, size=36)
+    title(s, "BIG DATA PIPELINE", 1.12, 0.35, 11.0, 1.3, size=72)
+    rows = [("1 • SPARK: WINDOWS + FEATURES", f"{V['N_WINDOWS']} windows → 8 wavelet-packet energies"),
+            ("2 • SPARK MLLIB: TRAINING", "Random forests with 20, 100 and 200 trees"),
+            ("3 • SPARK: IRF STEPS + TESTING", "Broadcast trees, parallel similarity, timing")]
+    for g, y, (h, d) in zip(["Group 3", "Group 8", "Group 13"], [1.85, 4.6, 7.35], rows):
+        group(s, g).top = Inches(y)
+        label(s, 1.45, y, 10.4, 0.93, h)
+        text(s, 1.12, y + 1.05, 10.94, 1.4, [d], size=34)
     notes(s, "Every heavy step runs in Spark: window generation and feature extraction with mapInPandas, training with MLlib, and the IRF steps with broadcast trees.")
 
-    # 8 IRF ---------------------------------------------------------------------------
-    s = T[7]
-    remove_text(s)
-    title(s, "Improved Random Forest", 1.5, 1.5, 17.0, 1.7, size=80, align=PP_ALIGN.CENTER)
-    text(s, 6.6, 3.92, 6.8, 1.1, [("How it works", 32, True, "0F172A")], align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
-    text(s, 5.1, 5.1, 10.0, 4.3, ["Train a normal forest", "Drop low-accuracy trees", "Compare trees by their paths",
-                                   "Keep the best tree of each similar group"], bullets=True, spacing=8, size=36)
-    notes(s, "Steps: train RF; score each tree on validation data and drop weak ones; extract root-to-leaf paths; compute tree similarity from matching nodes; group similar trees and keep the most accurate one per group.")
-
-    # 9 measures ----------------------------------------------------------------------
+    # 8 improved random forest (three rows) ---------------------------------------------------------
     s = T[8]
     remove_text(s)
-    remove(s, "Freeform 11")
-    title(s, "What We Measured", 1.12, 1.6, 10.5, 1.8, size=80)
-    text(s, 1.12, 3.8, 9.5, 6.0, ["Test accuracy", "Training time", "Diagnosis time", "Time saved with more cores"],
-         bullets=True, spacing=18, size=40)
-    text(s, 11.3, 3.8, 7.2, 5.8, [("Run on", 32, True, AMBER), "GitHub Actions runner",
-                                   f"4 vCPUs, {V['ENV_RAM']} GB RAM", "Spark 3.5 local mode"], spacing=16, size=36)
+    title(s, "IMPROVED RANDOM FOREST", 1.12, 1.75, 16.8, 1.55, size=84)
+    rows = [("1 • TRAIN + FILTER", "Train k trees, drop trees below the mean validation accuracy"),
+            ("2 • COMPARE PATHS", "Tree similarity from matching nodes on root-to-leaf paths"),
+            ("3 • KEEP THE BEST", "Keep the most accurate tree of each group of similar trees")]
+    for y, (h, d) in zip([4.05, 6.04, 8.04], rows):
+        label(s, 2.10, y, 5.6, 0.76, h)
+        text(s, 1.98, y + 0.86, 15.5, 0.8, [d], size=32)
+    notes(s, "Train RF; score each tree on validation data and drop weak ones; extract root-to-leaf paths; compute tree similarity from matching nodes; group similar trees and keep the most accurate one per group.")
+
+    # 9 measures ---------------------------------------------------------------------------------------
+    s = T[1]
+    remove_text(s)
+    title(s, "WHAT WE MEASURED", 4.3, 1.45, 11.6, 1.5, size=84, align=PP_ALIGN.CENTER)
+    box(s, 3.9, 3.5, 6.0, 5.6, ["Test accuracy", "Training time", "Diagnosis time", "Speed-up with cores"],
+        style="yellow", size=36, bullets=True, spacing=16)
+    box(s, 10.2, 3.5, 5.9, 5.6, [("Run on", 36, YELLOW, True), "GitHub Actions", f"4 vCPUs, {V['ENV_RAM']} GB RAM",
+                                 "Spark 3.5, local mode"], style="outline", size=34, spacing=14)
     notes(s, "Same measures as the paper. All runs were executed by the GitHub Actions workflow on a 4-vCPU machine; the results are in the repository.")
 
-    # 10 setup differences ------------------------------------------------------------
-    s = T[9]
-    remove_text(s)
-    title(s, "Paper vs Our Setup", 9.2, 1.5, 9.5, 1.7, size=72)
-    text(s, 9.2, 3.5, 9.4, 6.5, ["5-node cluster → one 4-core machine", "Worker nodes → executor cores",
-                                  "HDFS → Parquet on disk", "Missing settings → documented assumptions"],
-         bullets=True, spacing=18, size=36)
-    notes(s, "Main discrepancies, all listed in the report's discrepancy table: single machine, cores instead of nodes, no HDFS, and assumed window length, wavelet, depth and threshold.")
-
-    # 11-15 charts ----------------------------------------------------------------------
-    chart_slide(vis, F["e1"], "E1 – Accuracy", [
-        f"All forests ≈ **{V['E1_RF_200_ACC']}%**",
-        "Paper: 96.4–97.2%",
-        f"IRF keeps only **{V['E1_IRF_200_NTREES']} of 200** trees",
-        "Near-perfect accuracy leaves no room for an IRF gain"],
-        "Solid lines are our runs, dashed lines the paper. Our forests are about 3 points more accurate, and IRF equals Spark RF while using far fewer trees.")
-    chart_slide(extra[0], F["diag"], "Faster Diagnosis", [
-        f"IRF: **−{V['E1_DIAGRED_100']}%** time vs Spark RF",
-        "Paper: −74.3%",
-        "Fewer trees = fewer predictions",
-        "At this size, plain Python is fastest (Spark start-up cost)"],
-        "100 trees, whole test set. The smaller forest diagnoses about four times faster than Spark RF, close to the paper. Python is faster here because the data fit in memory and Spark has fixed job overhead.")
-    chart_slide(extra[1], F["sweep"], "Threshold Matters", [
-        f"Threshold 0.3 → {V['SW_N_3']} trees",
-        f"Threshold 0.5 → {V['SW_N_5']} trees",
-        f"Threshold 0.9 → {V['SW_N_9']} trees",
-        "Paper does not give its value"],
-        "The similarity threshold decides how many trees survive. The paper only says a small value was chosen, so this is a key source of difference.")
-    chart_slide(extra[2], F["e2"], "E2 – Scalability", [
-        f"**−{V['E2_RED_4']}%** training time with 4 cores",
-        "Paper: −73.3% with 4 nodes",
-        "Cores share one memory bus",
-        f"IRF costs **+{V['E2_OVERHEAD_MAX']}%** training (paper +86%)"],
-        "Same trend as the paper but a smaller gain, because extra cores of one machine are weaker than extra machines. The optimisation step adds training cost, as in the paper.")
-    chart_slide(extra[3], F["e3"], "E3 – Data Size", [
-        f"Accuracy flat: **{V['E3_IRF_ACC_100']}%**",
-        "Paper: +1.0 point from 5.6 to 20.4 GB",
-        f"Training time {V['E3_IRF_TRAIN_25']} → {V['E3_IRF_TRAIN_100']} s",
-        "Overlapping windows add volume, not information"],
-        "Labels show IRF accuracy at each size. Accuracy does not change; training time grows roughly with the number of rows.")
-
-    # 16 claims -----------------------------------------------------------------------
-    s = T[12]
-    remove_text(s)
-    for g in ("Group 6", "Group 9", "Group 12", "Group 15", "Freeform 18", "Freeform 19", "Freeform 20", "Freeform 21"):
-        remove(s, g)
-    title(s, "Claims vs Our Results", 2.0, 1.35, 16.0, 1.6, size=72, align=PP_ALIGN.CENTER)
-    text(s, 2.0, 3.0, 16.0, 0.8, [(f"{V['V_COUNT']} of 6 claims reproduced", 36, True, TEAL)], align=PP_ALIGN.CENTER)
-    items = [f"✓ Faster diagnosis **−{V['E1_DIAGRED_100']}%**", f"✗ IRF accuracy gain **{V['E1_D_IRF_RF_200']}**",
-             f"✓ Scales with cores **−{V['E2_RED_4']}%**", f"✗ Accuracy level **{V['E1_GAP_RF_200']} pts**",
-             f"✓ IRF costs more **+{V['E2_OVERHEAD_MAX']}%**", "✗ Gain with data size **0.00**"]
-    for k, t in enumerate(items):
-        pill(s, 1.6 + (k % 2) * 8.6, 4.15 + (k // 2) * 1.95, 8.2, 1.5, t, outline=TEAL if t.startswith("✓") else AMBER)
-    notes(s, "Left column: claims reproduced. Right column: not reproduced. The accuracy claims fail mainly because every forest is already above 99.7%.")
-
-    # 17 why differ ----------------------------------------------------------------------
+    # 10 setup differences (three label rows) -----------------------------------------------------------
     s = T[10]
     remove_text(s)
-    remove(s, "Group 6", "Group 9")
-    title(s, "Why Results Differ", 1.5, 2.2, 7.2, 5.5, size=80)
-    text(s, 9.1, 2.0, 9.4, 7.8, ["Easier task: 10 classes, 12 kHz data only",
-                                  "Accuracy ceiling above 99.7%",
-                                  f"Not leakage: time-split test still {V['B_RF_200_ACC']}%",
-                                  "Missing settings in the paper",
-                                  "Cores are not cluster nodes"], bullets=True, spacing=18, size=36, anchor=MSO_ANCHOR.MIDDLE)
+    title(s, "PAPER VS OUR SETUP", 1.12, 1.5, 10.5, 2.75, size=84)
+    for y, (h, d) in zip([5.02, 6.68, 8.35], [("PLATFORM", "5-node cluster → one 4-core machine"),
+                                              ("PARALLELISM", "Worker nodes → executor cores"),
+                                              ("SETTINGS", "Missing in paper → documented assumptions")]):
+        label(s, 1.30, y + 0.1, 3.9, 1.23, h, color=YELLOW, align=PP_ALIGN.CENTER)
+        text(s, 5.55, y + 0.08, 6.25, 1.27, [d], anchor=MSO_ANCHOR.MIDDLE, spacing=0)
+    notes(s, "Main discrepancies, all listed in the report's discrepancy table: single machine, cores instead of nodes, no HDFS, and assumed window length, wavelet, depth and threshold.")
+
+    # 11-15 charts -------------------------------------------------------------------------------------------
+    chart_slide(copies[0], F["e1"], "E1 – ACCURACY", [
+        f"All forests ≈ **{V['E1_RF_200_ACC']}%**", "Paper: 96.4–97.2%",
+        f"IRF keeps only **{V['E1_IRF_200_NTREES']} of 200** trees", "Near-perfect accuracy leaves no room for an IRF gain"],
+        "Solid lines are our runs, dashed lines the paper. Our forests are about 3 points more accurate, and IRF equals Spark RF while using far fewer trees.")
+    chart_slide(copies[1], F["diag"], "FASTER DIAGNOSIS", [
+        f"IRF: **−{V['E1_DIAGRED_100']}%** time vs Spark RF", "Paper: −74.3%", "Fewer trees = fewer predictions",
+        "Plain Python is fastest at this size (Spark start-up cost)"],
+        "100 trees, whole test set. The smaller forest diagnoses about four times faster than Spark RF, close to the paper. Python is faster here because the data fit in memory and Spark has fixed job overhead.")
+    chart_slide(copies[2], F["sweep"], "THRESHOLD MATTERS", [
+        f"Threshold 0.3 → **{V['SW_N_3']}** trees", f"Threshold 0.5 → **{V['SW_N_5']}** trees",
+        f"Threshold 0.9 → **{V['SW_N_9']}** trees", "The paper does not give its value"],
+        "The similarity threshold decides how many trees survive. The paper only says a small value was chosen, so this is a key source of difference.")
+    chart_slide(copies[3], F["e2"], "E2 – SCALABILITY", [
+        f"**−{V['E2_RED_4']}%** training time with 4 cores", "Paper: −73.3% with 4 nodes",
+        "Cores share one memory bus", f"IRF costs **+{V['E2_OVERHEAD_MAX']}%** training (paper +86%)"],
+        "Same trend as the paper but a smaller gain, because extra cores of one machine are weaker than extra machines. The optimisation step adds training cost, as in the paper.")
+    chart_slide(copies[4], F["e3"], "E3 – DATA SIZE", [
+        f"Accuracy flat: **{V['E3_IRF_ACC_100']}%**", "Paper: +1.0 point from 5.6 to 20.4 GB",
+        f"Training time {V['E3_IRF_TRAIN_25']} → {V['E3_IRF_TRAIN_100']} s", "Overlapping windows add volume, not information"],
+        "Labels show IRF accuracy at each size. Accuracy does not change; training time grows roughly with the number of rows.")
+
+    # 16 claims ----------------------------------------------------------------------------------------------
+    s = copies[5]
+    keep_only(s, "Freeform 42", "Group 43", "Group 46")
+    title(s, "CLAIMS VS OUR RESULTS", 1.12, 0.75, 13.0, 1.35, size=72)
+    text(s, 1.12, 2.3, 13.0, 0.8, [(f"{V['V_COUNT']} of 6 claims reproduced", 38, WHITE, True)], anchor=MSO_ANCHOR.MIDDLE)
+    items = [("✓ Faster diagnosis", f"−{V['E1_DIAGRED_100']}%", True),
+             ("✗ IRF accuracy gain", f"{V['E1_D_IRF_RF_200']} pts", False),
+             ("✓ Scales with cores", f"−{V['E2_RED_4']}%", True),
+             ("✗ Accuracy level", f"{V['E1_GAP_RF_200']} pts", False),
+             ("✓ IRF costs more", f"+{V['E2_OVERHEAD_MAX']}%", True),
+             ("✗ Gain with data size", "0.00 pts", False)]
+    for k, (a, b, ok) in enumerate(items):
+        x, y = 1.12 + (k % 2) * 8.95, 3.55 + (k // 2) * 2.05
+        box(s, x, y, 8.6, 1.6, [f"{a}  **{b}**" if not ok else f"{a}  {b}"], style="yellow" if ok else "outline",
+            size=36, bold=ok)
+    text(s, 1.12, 9.75, 17.5, 0.8, ["Yellow = reproduced • Dark = not reproduced"], size=32, color=WHITE)
+    notes(s, "Left column: claims reproduced. Right column: not reproduced. The accuracy claims fail mainly because every forest is already above 99.7%.")
+
+    # 17 why results differ (three columns) ------------------------------------------------------------------
+    s = T[7]
+    remove_text(s)
+    title(s, "WHY RESULTS DIFFER", 1.17, 1.8, 17.65, 1.6, size=88, align=PP_ALIGN.CENTER)
+    for x, (h, b) in zip([2.40, 8.23, 14.05], [("EASIER TASK", "10 classes, 12 kHz data only; paper's class list differs"),
+                                               ("CEILING", f"Every forest above 99.7%; time-split test still {V['B_RF_200_ACC']}%"),
+                                               ("SETUP", "Cores are not cluster nodes; key settings missing")]):
+        label(s, x + 0.25, 5.30, 4.15, 0.79, h)
+        text(s, x, 6.3, 4.45, 3.4, [b], size=32)
     notes(s, "The extra check E1b split every recording by time; accuracy stayed above 99.6%, so overlapping windows do not explain the high accuracy.")
 
-    # 18 conclusion -------------------------------------------------------------------------
-    s = T[13]
+    # 18 conclusion (three wide rows) ----------------------------------------------------------------------------
+    s = T[12]
     remove_text(s)
-    title(s, "Conclusion", 1.5, 1.6, 13.0, 1.7, size=80)
-    text(s, 1.5, 3.6, 14.5, 6.3, ["Efficiency claims reproduced",
-                                   "IRF accuracy gain not observable here",
-                                   "Paper only partly reproducible: missing settings, no code",
-                                   "All code, results and figures on GitHub"], bullets=True, spacing=20, size=40)
+    title(s, "CONCLUSION", 1.12, 1.6, 15.0, 1.6, size=88)
+    for y, (h, d) in zip([4.61, 6.60, 8.60], [("REPRODUCED", "Faster diagnosis, scaling with cores, extra training cost"),
+                                              ("NOT OBSERVABLE", "IRF accuracy gain: every forest is above 99.7%"),
+                                              ("LESSON", "Paper only partly reproducible: missing settings, no code")]):
+        label(s, 2.27, y, 14.0, 0.76, h)
+        text(s, 1.98, y + 0.86, 15.8, 0.8, [d], size=32)
     notes(s, "Key message: the method works as described for speed, but its accuracy advantage could not be tested on such an easy task. Next step: a real cluster and a harder task.")
 
-    # 19 thank you -----------------------------------------------------------------------------
-    s = T[14]
+    # 19 thank you -----------------------------------------------------------------------------------------------
+    s = T[13]
     remove_text(s)
-    text(s, 1.3, 1.0, 9, 0.7, [("AI508 Big Data Technologies", 32, False, MUTED)])
-    text(s, 10.7, 1.0, 8.0, 0.7, [(f"{V['AUTHOR']} – {V['STUDENT_ID']}", 32, False, MUTED)], align=PP_ALIGN.RIGHT)
-    title(s, "Thank You", 3.0, 3.0, 14.0, 2.2, size=110, align=PP_ALIGN.CENTER)
-    text(s, 3.0, 5.4, 14.0, 0.9, [("Questions?", 44, True, WHITE)], align=PP_ALIGN.CENTER)
-    text(s, 1.6, 7.62, 16.8, 1.2, [("github.com/amnaaljasmi701/ai508-bearing-irf-reproduction", 32, False, WHITE)],
-         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+    remove(s, "Freeform 18", "Group 25", "Group 28", "Freeform 33", "Freeform 35", "Freeform 37", "Freeform 39")
+    title(s, "THANK YOU", 1.12, 2.75, 12.0, 2.3, size=130)
+    label(s, 1.12, 5.51, 5.35, 0.82, "AI508 – Assignment 2", align=PP_ALIGN.CENTER)
+    label(s, 6.67, 5.52, 5.35, 0.82, f"{V['AUTHOR']} – {V['STUDENT_ID']}", align=PP_ALIGN.CENTER)
+    box(s, 1.12, 6.62, 14.0, 1.0, ["github.com/amnaaljasmi701/ai508-bearing-irf-reproduction"], style="outline",
+        size=32, pad=0.25)
     notes(s, "Invite questions.")
 
-    order = [T[0], T[1], T[2], T[3], T[4], T[5], T[6], T[7], T[8], T[9], vis, extra[0], extra[1], extra[2], extra[3],
-             T[12], T[10], T[13], T[14]]
+    # order ------------------------------------------------------------------------------------------------------
+    delete_slide(prs, T[9])
+    order = [T[0], T[2], T[3], T[5], T[11], T[4], T[6], T[8], T[1], T[10], *copies[:5], copies[5], T[7], T[12], T[13]]
     for i, sl in enumerate(order):
         move_slide(prs, sl, i)
     prs.save(OUT)
