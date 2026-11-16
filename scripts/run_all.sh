@@ -13,6 +13,4 @@ log "4  E1 accuracy";            $PY scripts/04_run_e1_accuracy.py --fresh
 log "5  E2 scalability";         $PY scripts/05_run_e2_scalability.py --fresh
 log "6  E3 data size";           $PY scripts/06_run_e3_datasize.py --fresh
 log "7  figures";                $PY scripts/07_make_figures.py
-log "8  report";                 $PY scripts/08_build_report.py
-log "9  slides";                 $PY scripts/09_build_slides.py
 log "finished"

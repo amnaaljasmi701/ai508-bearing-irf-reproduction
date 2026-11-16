@@ -136,7 +136,7 @@ jobs:
           else
             echo "IRF_CONFIG=config_smoke.yaml" >> $GITHUB_ENV; echo "SUFFIX=_smoke" >> $GITHUB_ENV
           fi
-      - run: pip install pandas numpy matplotlib PyYAML python-pptx
+      - run: pip install pandas numpy matplotlib PyYAML
       - uses: actions/download-artifact@v4
         with: { name: features, path: . }
       - uses: actions/download-artifact@v4
@@ -144,12 +144,10 @@ jobs:
           pattern: results-*
           path: results${{ env.SUFFIX }}
           merge-multiple: true
-      - name: Figures and report
+      - name: Figures
         run: |
           rm -rf data${SUFFIX}
           python scripts/07_make_figures.py
-          python scripts/08_build_report.py --outdir report${SUFFIX}
-          python scripts/09_build_slides.py
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"

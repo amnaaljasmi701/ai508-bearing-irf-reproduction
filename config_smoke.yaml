@@ -59,8 +59,3 @@ experiments:
   e2_repeats: 1
   e3_fractions: [0.25, 0.5, 1.0]        # 1.4, 2.8 and 5.6 GB
   e3_trees: 20
-
-report:                                 # used only by scripts/08_build_report.py
-  author: "[Name]"
-  student_id: "[ID]"
-  github_url: "https://github.com/<your-account>/ai508-bearing-irf-reproduction"

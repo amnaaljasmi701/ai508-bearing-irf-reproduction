@@ -34,7 +34,6 @@ src/irf_repro/
   irf.py                  IRF Steps 2-7: filter, Eq. (1)-(3) similarity, grouping, selection, voting
   spark_jobs.py           Spark session, splits, Spark RF, distributed IRF, sub-model rebuild
   experiment.py           one experimental run (all three methods, timings, CSV output)
-  report_values.py        turns results/*.csv into the numbers used in the report/slides
   paper_values.py         numbers reported by the paper (for comparison only)
 scripts/
   00_check_env.py         records hardware/software versions -> results/environment.json
@@ -45,11 +44,8 @@ scripts/
   05_run_e2_scalability.py E2
   06_run_e3_datasize.py   E3
   07_make_figures.py      figures/*.png from results/*.csv
-  08_build_report.py      fills the report template with the measured numbers
-  09_build_slides.py      builds the presentation in the themed template from the results
   run_all.sh              whole pipeline
 tests/test_core.py        unit tests (tree export, IRF logic, wavelet features)
-report/                   report and slide templates (the final report and slides are submitted separately)
 results/  figures/        produced by the scripts (commit them)
 ```
 
@@ -80,10 +76,8 @@ Steps can also be run one by one (`python scripts/02_make_dataset.py`, …). Re-
 script with `--fresh` deletes its previous CSV first. To average over several seeds set
 `experiments.seeds: [42, 7, 2026]` in `config.yaml`.
 
-Before building the report, set `report.author`, `report.student_id` and `report.github_url` in
-`config.yaml`. `python scripts/08_build_report.py` writes `report/AI508_A2_Report.docx` and
-`python scripts/09_build_slides.py` writes `report/AI508_A2_Presentation.pptx`; every number in them comes from
-`results/`. These generated files are not stored in the repository.
+The final report and presentation are submitted separately and are not stored in this repository;
+every number in them comes from the files in `results/`.
 
 ## Implementation notes
 
@@ -103,5 +97,5 @@ Before building the report, set `report.author`, `report.student_id` and `report
 
 ## Acknowledgements
 
-Apache Spark/PySpark, NumPy, pandas, PyArrow, SciPy, PyWavelets, scikit-learn, Matplotlib,
-python-docx, python-pptx; the report template was generated with docx (`report/template_src`). Data: Case Western Reserve University Bearing Data Center.
+Apache Spark/PySpark, NumPy, pandas, PyArrow, SciPy, PyWavelets, scikit-learn, Matplotlib.
+Data: Case Western Reserve University Bearing Data Center.

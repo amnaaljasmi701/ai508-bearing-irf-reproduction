@@ -1,4 +1,4 @@
-"""Figures for the report and slides, built only from the CSV files in results/."""
+"""Figures built only from the CSV files in results/."""
 import _bootstrap  # noqa: F401
 import os
 
