@@ -49,14 +49,14 @@ scripts/
   09_build_slides.py      builds the presentation in the themed template from the results
   run_all.sh              whole pipeline
 tests/test_core.py        unit tests (tree export, IRF logic, wavelet features)
-report/                   report and slide templates (+ generated files)
+report/                   report and slide templates (the final report and slides are submitted separately)
 results/  figures/        produced by the scripts (commit them)
 ```
 
 ## Running on GitHub Actions (how the reported results were produced)
 
 The workflow `.github/workflows/experiments.yml` runs the whole pipeline on a GitHub-hosted
-runner (4 vCPUs, 16 GB RAM) and commits `results/`, `figures/` and the generated report back to
+runner (4 vCPUs, 16 GB RAM) and commits `results/` and `figures/` back to
 the repository. Start it from the **Actions** tab (*Run workflow*, mode `smoke`, `full` or `extra`)
 or push a commit whose message contains `[run smoke]`, `[run full]` or `[run extra]` (E1b only).
 
@@ -82,7 +82,8 @@ script with `--fresh` deletes its previous CSV first. To average over several se
 
 Before building the report, set `report.author`, `report.student_id` and `report.github_url` in
 `config.yaml`. `python scripts/08_build_report.py` writes `report/AI508_A2_Report.docx` and
-`report/AI508_A2_Presentation.pptx` (via `09_build_slides.py`); every number in them comes from `results/`.
+`python scripts/09_build_slides.py` writes `report/AI508_A2_Presentation.pptx`; every number in them comes from
+`results/`. These generated files are not stored in the repository.
 
 ## Implementation notes
 
@@ -103,5 +104,4 @@ Before building the report, set `report.author`, `report.student_id` and `report
 ## Acknowledgements
 
 Apache Spark/PySpark, NumPy, pandas, PyArrow, SciPy, PyWavelets, scikit-learn, Matplotlib,
-python-docx, python-pptx; the report/slide templates were generated with docx and pptxgenjs
-(`report/template_src`). Data: Case Western Reserve University Bearing Data Center.
+python-docx, python-pptx; the report template was generated with docx (`report/template_src`). Data: Case Western Reserve University Bearing Data Center.

@@ -11,3 +11,8 @@ derby.log
 *.part
 report/~$*
 node_modules/
+# generated deliverables (submitted separately, not stored in the repository)
+report/AI508_A2_Report.docx
+report/AI508_A2_Report.pdf
+report/AI508_A2_Presentation.pptx
+report_smoke/
