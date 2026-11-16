@@ -45,7 +45,8 @@ scripts/
   05_run_e2_scalability.py E2
   06_run_e3_datasize.py   E3
   07_make_figures.py      figures/*.png from results/*.csv
-  08_build_report.py      fills report/ and slide templates with the measured numbers
+  08_build_report.py      fills the report template with the measured numbers
+  09_build_slides.py      builds the presentation in the themed template from the results
   run_all.sh              whole pipeline
 tests/test_core.py        unit tests (tree export, IRF logic, wavelet features)
 report/                   report and slide templates (+ generated files)
@@ -81,7 +82,7 @@ script with `--fresh` deletes its previous CSV first. To average over several se
 
 Before building the report, set `report.author`, `report.student_id` and `report.github_url` in
 `config.yaml`. `python scripts/08_build_report.py` writes `report/AI508_A2_Report.docx` and
-`report/AI508_A2_Presentation.pptx`; every number in them comes from `results/`.
+`report/AI508_A2_Presentation.pptx` (via `09_build_slides.py`); every number in them comes from `results/`.
 
 ## Implementation notes
 

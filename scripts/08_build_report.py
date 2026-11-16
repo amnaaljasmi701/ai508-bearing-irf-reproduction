@@ -1,7 +1,6 @@
 """Fill the report and slide templates with the measured results.
 
   report/report_template.docx        -> report/AI508_A2_Report.docx
-  report/presentation_template.pptx  -> report/AI508_A2_Presentation.pptx
 
 {{TOKENS}} in the text are replaced by values computed from results/*.csv|json
 (src/irf_repro/report_values.py), and every image whose alt-text is "FIG:<name>.png"
@@ -82,8 +81,7 @@ def main():
     os.makedirs(a.outdir, exist_ok=True)
     cfg = load_config()
     values = add_verdicts(build_values(cfg))
-    jobs = [("report_template.docx", "AI508_A2_Report.docx"),
-            ("presentation_template.pptx", "AI508_A2_Presentation.pptx")]
+    jobs = [("report_template.docx", "AI508_A2_Report.docx")]     # slides: scripts/09_build_slides.py
     for tpl, out in jobs:
         tpl_path = os.path.join(REPO_ROOT, "report", tpl)
         if not os.path.exists(tpl_path):
